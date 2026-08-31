@@ -1,10 +1,12 @@
 package ui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"ptop/internal/bench"
+	"ptop/internal/history"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -53,5 +55,79 @@ func TestKeyFlowToPreflight(t *testing.T) {
 	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEnter}) // depth field -> preflight
 	if mdl.(Model).scr != scrPreflight {
 		t.Fatalf("expected preflight, got %d", mdl.(Model).scr)
+	}
+}
+
+func TestHistoryDeleteKeyFlow(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "h.jsonl")
+	t.Setenv("PTOP_HISTORY", p)
+
+	sess := history.NewSession()
+	r := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "X", Value: 1}}}
+	_ = history.Save(sess, "host", "normal", r, nil)
+
+	m := New()
+	m.hist, _ = history.Load()
+	m.scr = scrHistory
+
+	// Pressing 'r' should set confirmDel
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(Model)
+	if m.confirmDel != sess {
+		t.Fatalf("expected confirmDel %s, got %s", sess, m.confirmDel)
+	}
+
+	// Pressing 'n' cancels confirmation
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	m = nm.(Model)
+	if m.confirmDel != "" {
+		t.Fatalf("expected confirmDel to be cleared, got %s", m.confirmDel)
+	}
+
+	// Pressing 'r' then 'y' deletes the session
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(Model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(Model)
+	if m.confirmDel != "" {
+		t.Fatalf("expected confirmDel to be cleared after y, got %s", m.confirmDel)
+	}
+	if len(m.hist) != 0 {
+		t.Fatalf("expected m.hist to be empty, got %d records", len(m.hist))
+	}
+}
+
+func TestHistoryViewDeleteKeyFlow(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "h.jsonl")
+	t.Setenv("PTOP_HISTORY", p)
+
+	sess := history.NewSession()
+	r := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "X", Value: 1}}}
+	_ = history.Save(sess, "host", "normal", r, nil)
+
+	m := New()
+	m.hist, _ = history.Load()
+	sessions := history.Sessions(m.hist)
+	m.hview = &sessions[0]
+	m.scr = scrHistoryView
+
+	// Pressing 'r' sets confirmDel
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(Model)
+	if m.confirmDel != sess {
+		t.Fatalf("expected confirmDel %s, got %s", sess, m.confirmDel)
+	}
+
+	// Pressing 'y' deletes and navigates back to scrHistory
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(Model)
+	if m.scr != scrHistory {
+		t.Fatalf("expected scrHistory after deleting view, got %d", m.scr)
+	}
+	if m.confirmDel != "" {
+		t.Fatalf("expected confirmDel cleared, got %s", m.confirmDel)
+	}
+	if len(m.hist) != 0 {
+		t.Fatalf("expected m.hist to be empty, got %d records", len(m.hist))
 	}
 }

@@ -89,14 +89,15 @@ type Model struct {
 	scroll  int
 
 	// history
-	session   string
-	hist      []history.Record
-	hcur      int // cursor on the history-area chooser / session list
-	hview     *history.Session
-	harea     string // selected test area
-	haCur     int    // selected metric row in the area overview
-	hmName    string // selected metric for the chart screen
-	hAllHosts bool
+	session    string
+	hist       []history.Record
+	hcur       int // cursor on the history-area chooser / session list
+	hview      *history.Session
+	harea      string // selected test area
+	haCur      int    // selected metric row in the area overview
+	hmName     string // selected metric for the chart screen
+	hAllHosts  bool
+	confirmDel string // session ID pending deletion, or ""
 }
 
 type runResult struct {
@@ -244,6 +245,27 @@ func (m Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	sessions := history.Sessions(m.hist)
+
+	if m.confirmDel != "" {
+		switch msg.String() {
+		case "y", "Y":
+			_ = history.DeleteSession(m.confirmDel)
+			m.hist, _ = history.Load()
+			m.confirmDel = ""
+			newSessions := history.Sessions(m.hist)
+			if m.hcur >= len(newSessions) {
+				m.hcur = len(newSessions) - 1
+			}
+			if m.hcur < 0 {
+				m.hcur = 0
+			}
+			return m, nil
+		default:
+			m.confirmDel = ""
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -257,6 +279,10 @@ func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		if m.hcur < len(sessions)-1 {
 			m.hcur++
+		}
+	case "r":
+		if m.hcur < len(sessions) {
+			m.confirmDel = sessions[m.hcur].ID
 		}
 	case "enter", "right", "l":
 		if m.hcur < len(sessions) {
@@ -363,11 +389,37 @@ func (m Model) updateHistMetric(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateHistoryView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.confirmDel != "" {
+		switch msg.String() {
+		case "y", "Y":
+			_ = history.DeleteSession(m.confirmDel)
+			m.hist, _ = history.Load()
+			m.confirmDel = ""
+			m.hview = nil
+			m.scr = scrHistory
+			newSessions := history.Sessions(m.hist)
+			if m.hcur >= len(newSessions) {
+				m.hcur = len(newSessions) - 1
+			}
+			if m.hcur < 0 {
+				m.hcur = 0
+			}
+			return m, nil
+		default:
+			m.confirmDel = ""
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "esc", "left", "h":
 		m.scr = scrHistory
+	case "r":
+		if m.hview != nil {
+			m.confirmDel = m.hview.ID
+		}
 	case "up", "k":
 		m.scroll--
 	case "down", "j":
