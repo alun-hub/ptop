@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"ptop/internal/bench"
+	"ptop/internal/history"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -22,6 +23,10 @@ func (m Model) View() string {
 		body = m.viewRunning()
 	case scrResults:
 		body = m.viewResults()
+	case scrHistory:
+		body = m.viewHistory()
+	case scrHistoryView:
+		body = m.viewHistoryView()
 	}
 	return m.header() + "\n" + body + "\n" + m.footer()
 }
@@ -76,6 +81,10 @@ func (m Model) footer() string {
 		keys = "esc cancel   q quit"
 	case scrResults:
 		keys = "←/→ switch test   ↑/↓ scroll   ⏎ back to menu   q quit"
+	case scrHistory:
+		keys = "↑/↓ select   ⏎ open   esc menu   q quit"
+	case scrHistoryView:
+		keys = "↑/↓ scroll   esc back to list   q quit"
 	}
 	return stySub.Render(strings.Repeat("─", m.width())) + "\n" + styHelp.Render(keys)
 }
@@ -330,11 +339,17 @@ func (m Model) resultLines() []string {
 		rows = append(rows, strings.Join(tabs, ""), "")
 	}
 
+	base := history.Baseline(m.hist, rr.res.Kind.String(), m.info.Hostname, m.session)
+
 	rows = append(rows, styHead.Render(kindTitle(rr.res.Kind)))
 	if rr.res.Tool != "" {
 		rows = append(rows, stySub.Render("measured with "+rr.res.Tool))
 	}
-	rows = append(rows, stySub.Render("Bars run from left (worst) to right (best); the ↳ line says what the value means."), "")
+	hint := "Bars run from left (worst) to right (best); the ↳ line says what the value means."
+	if base != nil {
+		hint += " Compared with your run on " + base.Time.Local().Format("Jan 2 15:04") + "."
+	}
+	rows = append(rows, stySub.Render(hint), "")
 
 	if rr.err != nil {
 		rows = append(rows, verdictStyle(bench.VPoor).Render("Test failed: "+rr.err.Error()))
@@ -356,6 +371,9 @@ func (m Model) resultLines() []string {
 		head := styMetric.Render("  "+mt.Name) + "   " + verdictStyle(mt.Verdict).Render(mt.Display)
 		if b := verdictBadge(mt.Verdict); b != "" {
 			head += "   " + b
+		}
+		if d := history.Compare(base, mt.Name, mt.Value, mt.LowerBetter); d.Valid {
+			head += "   " + deltaStyle(d).Render(d.Label())
 		}
 		rows = append(rows, head)
 		if mt.HasBar {
@@ -381,6 +399,113 @@ func (m Model) resultLines() []string {
 		rows = append(rows, "", stySub.Render("Press ⏎ for the menu - you can run the CPU, memory and network tests there too."))
 	}
 	return rows
+}
+
+// ---- history --------------------------------------------------
+
+func (m Model) viewHistory() string {
+	sessions := history.Sessions(m.hist)
+	if len(sessions) == 0 {
+		return styPanel.Width(m.width()).Render(stySub.Render(
+			"No history yet.\n\nRun a test - every run is saved to\n" + history.Path()))
+	}
+	var rows []string
+	rows = append(rows, styHead.Render("Past runs"),
+		stySub.Render("Newest first. Open one to see how each number moved since the run before it."), "")
+	for i, s := range sessions {
+		marker := "  "
+		nameSty := styItem
+		if i == m.hcur {
+			marker = styKey.Render("▶ ")
+			nameSty = styMetric
+		}
+		line := fmt.Sprintf("%s%s  %s  %s",
+			marker,
+			nameSty.Render(s.Time.Local().Format("2006-01-02 15:04")),
+			stySub.Render(padRight(trim(s.Host, 16), 16)),
+			stySub.Render(strings.Join(s.Kinds(), ", ")))
+		rows = append(rows, line)
+	}
+	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+}
+
+func (m Model) viewHistoryView() string {
+	rows := m.historyLines()
+	avail := m.bodyHeight()
+	hint := ""
+	if len(rows) > avail {
+		maxS := len(rows) - avail
+		s := m.scroll
+		if s > maxS {
+			s = maxS
+		}
+		rows = rows[s : s+avail]
+		if s > 0 && s < maxS {
+			hint = "  ▲▼ scroll"
+		} else if s < maxS {
+			hint = "  ▼ more below"
+		} else {
+			hint = "  ▲ top hidden"
+		}
+	}
+	body := styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+	if hint != "" {
+		body += "\n" + stySub.Render(hint)
+	}
+	return body
+}
+
+func (m Model) historyLines() []string {
+	if m.hview == nil {
+		return []string{stySub.Render("nothing selected")}
+	}
+	s := *m.hview
+	var older []history.Record
+	for _, r := range m.hist {
+		if r.Time.Before(s.Time) {
+			older = append(older, r)
+		}
+	}
+	var rows []string
+	rows = append(rows, styHead.Render("Run "+s.Time.Local().Format("2006-01-02 15:04:05")),
+		stySub.Render(s.Host+" · depth "+s.Depth), "")
+	for _, r := range s.Records {
+		rows = append(rows, styMetric.Render(strings.ToUpper(r.Kind)))
+		if r.Tool != "" {
+			rows = append(rows, stySub.Render("  measured with "+r.Tool))
+		}
+		if r.Failed {
+			rows = append(rows, verdictStyle(bench.VPoor).Render("  failed: "+r.Error))
+		}
+		base := history.Baseline(older, r.Kind, r.Host, s.ID)
+		for _, mt := range r.Metrics {
+			line := "  " + styBody.Render(padRight(mt.Name, 34)) + " " + mt.Display
+			if mt.Verdict != "" {
+				line += "  " + histVerdictStyle(mt.Verdict).Render("● "+mt.Verdict)
+			}
+			if d := history.Compare(base, mt.Name, mt.Value, mt.LowerBetter); d.Valid {
+				line += "  " + deltaStyle(d).Render(d.Label())
+			}
+			rows = append(rows, line)
+		}
+		if r.Summary != "" {
+			rows = append(rows, stySub.Render(wrap("  → "+r.Summary, m.width()-6)))
+		}
+		rows = append(rows, "")
+	}
+	return rows
+}
+
+func histVerdictStyle(label string) lipgloss.Style {
+	switch label {
+	case "good":
+		return lipgloss.NewStyle().Foreground(colGood)
+	case "ok":
+		return lipgloss.NewStyle().Foreground(colOkay)
+	case "low":
+		return lipgloss.NewStyle().Foreground(colPoor)
+	}
+	return lipgloss.NewStyle().Foreground(colDim)
 }
 
 // ---- small helpers ---------------------------------------------

@@ -51,7 +51,7 @@ func runMem(ctx context.Context, cfg Config, out chan<- Event) (Result, error) {
 		Note:    memBWNote(bwGBs),
 		Bar:     normLog(clampLo(bwGBs, 1), 1, 50), HasBar: true,
 		ScaleLo: "slow", ScaleHi: "fast server DDR",
-	})
+	}.cmp(bwGBs, "GB/s", false))
 
 	// Latency: a dependent-load pointer chase through a region much larger than
 	// the last-level cache. This is what stalls the CPU on random-access
@@ -65,7 +65,7 @@ func runMem(ctx context.Context, cfg Config, out chan<- Event) (Result, error) {
 			Note:    memLatNote(ns),
 			Bar:     1 - norm(ns, 40, 300), HasBar: true,
 			ScaleLo: "slow", ScaleHi: "fast",
-		})
+		}.cmp(ns, "ns", true))
 	}
 	if m, ok := numaMetric(); ok {
 		res.Metrics = append(res.Metrics, m)

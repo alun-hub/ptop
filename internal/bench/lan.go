@@ -32,7 +32,7 @@ func lanMetrics(ctx context.Context, out chan<- Event, cfg Config) []Metric {
 					Verdict: lanLatVerdict(avg), Note: lanLatNote(avg, jit),
 					Bar: 1 - normLog(clampLo(avg, 0.05), 0.05, 20), HasBar: true,
 					ScaleLo: "slow", ScaleHi: "fast",
-				})
+				}.cmp(avg, "ms", true))
 			}
 		}
 	}
@@ -67,7 +67,7 @@ func lanMetrics(ctx context.Context, out chan<- Event, cfg Config) []Metric {
 					Verdict: tcpRTTVerdict(rtt), Note: "one full handshake round trip - compare with ICMP latency above",
 					Bar: 1 - normLog(clampLo(rtt, 0.1), 0.1, 50), HasBar: true,
 					ScaleLo: "slow", ScaleHi: "fast",
-				})
+				}.cmp(rtt, "ms", true))
 			}
 			if cfg.Depth != Quick {
 				if rate := tcpConnRate(ctx, hp); rate > 0 {
@@ -76,7 +76,7 @@ func lanMetrics(ctx context.Context, out chan<- Event, cfg Config) []Metric {
 						Verdict: connRateVerdict(rate), Note: connRateNote(rate),
 						Bar: normLog(clampLo(rate, 50), 50, 30000), HasBar: true,
 						ScaleLo: "slow", ScaleHi: "fast",
-					})
+					}.cmp(rate, "/s", false))
 				}
 			}
 		}
@@ -88,7 +88,7 @@ func lanMetrics(ctx context.Context, out chan<- Event, cfg Config) []Metric {
 			ms = append(ms, Metric{
 				Name: "Path MTU (to gateway)", Display: fmt.Sprintf("%d bytes", mtu),
 				Verdict: mtuVerdict(mtu), Note: mtuNote(mtu),
-			})
+			}.cmp(float64(mtu), "bytes", false))
 		}
 	}
 
@@ -106,7 +106,7 @@ func lanMetrics(ctx context.Context, out chan<- Event, cfg Config) []Metric {
 				Verdict: floodVerdict(mbits), Note: floodNote(mbits),
 				Bar: normLog(clampLo(mbits, 10), 10, 1000), HasBar: true,
 				ScaleLo: "slow", ScaleHi: "1 Gbit+",
-			})
+			}.cmp(mbits, "Mbit/s", false))
 		}
 	}
 	return ms
@@ -218,6 +218,7 @@ func linkMetric(iface string) (Metric, bool) {
 	m.HasBar = true
 	m.ScaleLo = "100 Mbit"
 	m.ScaleHi = "25 Gbit"
+	m.Value, m.Unit = float64(speed), "Mbit/s"
 	switch {
 	case duplex == "half":
 		m.Verdict = VPoor
@@ -257,6 +258,7 @@ func nicErrorMetric(iface string) (Metric, bool) {
 		Display: fmt.Sprintf("%d in %s packets", errs, humanCount(total)),
 		Bar:     1 - normLog(clampLo(ppm+1, 1), 1, 1000), HasBar: true,
 		ScaleLo: "many", ScaleHi: "clean",
+		Value: float64(errs), Unit: "errors", LowerBetter: true,
 	}
 	switch {
 	case errs == 0:

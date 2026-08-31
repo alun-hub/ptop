@@ -15,7 +15,7 @@ func TestScreensRender(t *testing.T) {
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(Model)
 
-	screens := []screen{scrMenu, scrConfig, scrPreflight, scrRunning, scrResults}
+	screens := []screen{scrMenu, scrConfig, scrPreflight, scrRunning, scrResults, scrHistory, scrHistoryView}
 	for _, s := range screens {
 		mm := m
 		mm.scr = s
@@ -26,7 +26,7 @@ func TestScreensRender(t *testing.T) {
 			mm.results = []runResult{{res: bench.Result{
 				Kind: bench.CPU, Tool: "test",
 				Metrics: []bench.Metric{{Name: "X", Display: "1", Verdict: bench.VGood, Note: "n"}},
-				Summary: "hej",
+				Summary: "summary",
 			}}}
 		}
 		out := mm.View()

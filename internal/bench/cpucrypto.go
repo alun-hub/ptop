@@ -24,7 +24,7 @@ func cpuThroughputMetrics(ctx context.Context) []Metric {
 			Verdict: aesVerdict(v), Note: aesNote(v),
 			Bar: normLog(clampLo(v, 50), 50, 8000), HasBar: true,
 			ScaleLo: "software AES", ScaleHi: "AES-NI",
-		})
+		}.cmp(v, "MB/s", false))
 	}
 	if v := deflateThroughputMBs(ctx); v > 0 {
 		ms = append(ms, Metric{
@@ -32,7 +32,7 @@ func cpuThroughputMetrics(ctx context.Context) []Metric {
 			Verdict: compVerdict(v), Note: "throughput of the input stream at zlib level 1 - matters for log shipping and backups",
 			Bar: normLog(clampLo(v, 20), 20, 600), HasBar: true,
 			ScaleLo: "slow", ScaleHi: "fast",
-		})
+		}.cmp(v, "MB/s", false))
 	}
 	return ms
 }

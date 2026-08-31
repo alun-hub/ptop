@@ -65,6 +65,17 @@ func (d Depth) String() string {
 	return "Normal (~30s)"
 }
 
+// Token is the short lowercase form used on the CLI and in history.
+func (d Depth) Token() string {
+	switch d {
+	case Quick:
+		return "quick"
+	case Deep:
+		return "deep"
+	}
+	return "normal"
+}
+
 // Config is a fully resolved test request.
 type Config struct {
 	Kind   Kind
@@ -134,6 +145,19 @@ type Metric struct {
 	ScaleLo string
 	ScaleHi string
 	HasBar  bool // draw the gauge even when Bar rounds to 0
+
+	// Value / LowerBetter drive run-to-run history comparison. Value is in a
+	// stable unit for this metric name (see Unit); 0 means "not comparable"
+	// (informational rows like GPU model or NUMA topology).
+	Value       float64
+	Unit        string
+	LowerBetter bool
+}
+
+// cmp fills Value/Unit/LowerBetter and returns the metric (chaining helper).
+func (m Metric) cmp(v float64, unit string, lowerBetter bool) Metric {
+	m.Value, m.Unit, m.LowerBetter = v, unit, lowerBetter
+	return m
 }
 
 // norm maps v onto 0..1 across [lo,hi] (clamped).

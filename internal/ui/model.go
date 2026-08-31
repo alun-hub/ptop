@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"ptop/internal/bench"
+	"ptop/internal/history"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -21,11 +22,14 @@ const (
 	scrPreflight
 	scrRunning
 	scrResults
+	scrHistory
+	scrHistoryView
 )
 
 type menuItem struct {
 	kind  bench.Kind
 	all   bool
+	hist  bool
 	title string
 	desc  string
 	time  string
@@ -80,6 +84,12 @@ type Model struct {
 	results []runResult
 	resCur  int
 	scroll  int
+
+	// history
+	session string
+	hist    []history.Record
+	hcur    int // selected session on the history screen
+	hview   *history.Session
 }
 
 type runResult struct {
@@ -123,6 +133,8 @@ func New() Model {
 				desc: "What GPU is present, its VRAM, load and temperature. Reports status\nonly - no compute benchmark unless glmark2 is installed."},
 			{all: true, title: "Run all tests", time: "~3-6 min",
 				desc: "Disk, CPU, memory, network and GPU one after another. Good for a\nfull picture of a new server."},
+			{hist: true, title: "History", time: "",
+				desc: "Browse earlier runs and see how much faster or slower this machine\nhas become since then."},
 		},
 	}
 }
@@ -155,6 +167,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRunning(msg)
 		case scrResults:
 			return m.updateResults(msg)
+		case scrHistory:
+			return m.updateHistory(msg)
+		case scrHistoryView:
+			return m.updateHistoryView(msg)
 		}
 
 	case spinner.TickMsg:
@@ -194,6 +210,12 @@ func (m Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter", " ":
 		it := m.menu[m.menuCur]
+		if it.hist {
+			m.hist, _ = history.Load()
+			m.hcur = 0
+			m.scr = scrHistory
+			return m, nil
+		}
 		m.isAll = it.all
 		if !it.all {
 			m.kind = it.kind
@@ -203,6 +225,56 @@ func (m Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.configFields()[0] == fieldHost {
 			m.host.Focus()
 		}
+	}
+	return m, nil
+}
+
+func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	sessions := history.Sessions(m.hist)
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.scr = scrMenu
+	case "up", "k":
+		if m.hcur > 0 {
+			m.hcur--
+		}
+	case "down", "j":
+		if m.hcur < len(sessions)-1 {
+			m.hcur++
+		}
+	case "enter", "right", "l":
+		if m.hcur < len(sessions) {
+			s := sessions[m.hcur]
+			m.hview = &s
+			m.scroll = 0
+			m.scr = scrHistoryView
+		}
+	}
+	return m, nil
+}
+
+func (m Model) updateHistoryView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc", "left", "h":
+		m.scr = scrHistory
+	case "up", "k":
+		m.scroll--
+	case "down", "j":
+		m.scroll++
+	case "pgup", "b":
+		m.scroll -= m.bodyHeight() - 2
+	case "pgdown", " ", "f":
+		m.scroll += m.bodyHeight() - 2
+	}
+	if maxS := len(m.historyLines()) - m.bodyHeight(); m.scroll > maxS {
+		m.scroll = maxS
+	}
+	if m.scroll < 0 {
+		m.scroll = 0
 	}
 	return m, nil
 }
@@ -337,6 +409,8 @@ func (m Model) buildQueue() []bench.Config {
 func (m Model) startRun() (tea.Model, tea.Cmd) {
 	m.queue = m.buildQueue()
 	m.results = nil
+	m.session = history.NewSession()
+	m.hist, _ = history.Load()
 	m.scr = scrRunning
 	return m.next()
 }
@@ -383,6 +457,7 @@ func (m Model) handleEvent(ev bench.Event) (tea.Model, tea.Cmd) {
 			m.cancel = nil
 		}
 		m.results = append(m.results, runResult{res: e.Result, err: e.Err})
+		_ = history.Save(m.session, m.info.Hostname, m.cur.Depth.Token(), e.Result, e.Err)
 		return m.next()
 	}
 	return m, waitEvent(m.ch)

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"ptop/internal/bench"
+	"ptop/internal/history"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -72,6 +73,16 @@ func verdictStyle(v bench.Verdict) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(colPoor).Bold(true)
 	}
 	return lipgloss.NewStyle().Foreground(colHi)
+}
+
+func deltaStyle(d history.Delta) lipgloss.Style {
+	switch {
+	case d.Pct > 2:
+		return lipgloss.NewStyle().Foreground(colGood)
+	case d.Pct < -2:
+		return lipgloss.NewStyle().Foreground(colPoor)
+	}
+	return lipgloss.NewStyle().Foreground(colDim)
 }
 
 func verdictBadge(v bench.Verdict) string {

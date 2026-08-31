@@ -45,7 +45,7 @@ func runGPU(ctx context.Context, cfg Config, out chan<- Event) (Result, error) {
 				Verdict: glmarkVerdict(score), Note: "rough OpenGL throughput - higher is faster",
 				Bar: normLog(clampLo(score, 50), 50, 20000), HasBar: true,
 				ScaleLo: "slow", ScaleHi: "fast",
-			})
+			}.cmp(score, "score", false))
 		}
 	}
 
@@ -85,7 +85,7 @@ func gpuNvidia(ctx context.Context, out chan<- Event) (Result, bool) {
 			Metric{Name: pfx + "Utilisation", Display: fmt.Sprintf("%.0f%%", util),
 				Note: "how busy the GPU is right now"},
 			Metric{Name: pfx + "Temperature", Display: fmt.Sprintf("%.0f C", temp),
-				Verdict: tempVerdict(temp), Note: tempNote(temp)},
+				Verdict: tempVerdict(temp), Note: tempNote(temp)}.cmp(temp, "C", true),
 		)
 	}
 	if len(res.Metrics) == 0 {
@@ -162,7 +162,7 @@ func drmCardMetrics(path string, multi bool, idx int) []Metric {
 	}
 	if t := hwmonTemp(dev); t > 0 {
 		ms = append(ms, Metric{Name: pfx + "Temperature", Display: fmt.Sprintf("%.0f C", t),
-			Verdict: tempVerdict(t), Note: tempNote(t)})
+			Verdict: tempVerdict(t), Note: tempNote(t)}.cmp(t, "C", true))
 	}
 	return ms
 }

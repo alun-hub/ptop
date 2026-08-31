@@ -240,7 +240,7 @@ func seqMetric(name string, mbps float64) Metric {
 		Name: name, Display: mbs(mbps), Verdict: verdictSeq(mbps), Note: noteSeq(mbps),
 		Bar: normLog(clampLo(mbps, 40), 40, 5000), HasBar: true,
 		ScaleLo: "hard disk", ScaleHi: "fast NVMe",
-	}
+	}.cmp(mbps, "MB/s", false)
 }
 
 func iopsMetric(name string, v float64, note string) Metric {
@@ -248,7 +248,7 @@ func iopsMetric(name string, v float64, note string) Metric {
 		Name: name, Display: iops(v), Verdict: verdictIOPS(v), Note: note,
 		Bar: normLog(clampLo(v, 100), 100, 200000), HasBar: true,
 		ScaleLo: "hard disk", ScaleHi: "fast NVMe",
-	}
+	}.cmp(v, "IOPS", false)
 }
 
 // latMetric renders an I/O latency (nanoseconds in) as a "lower is better" gauge.
@@ -268,7 +268,7 @@ func latMetric(name string, ns float64) Metric {
 		Name: name, Display: durMS(ms), Verdict: v, Note: note,
 		Bar: 1 - normLog(clampLo(ms, 0.05), 0.05, 100), HasBar: true,
 		ScaleLo: "slow", ScaleHi: "fast",
-	}
+	}.cmp(ms, "ms", true)
 }
 
 // commitMetric interprets fsync/fdatasync latency (nanoseconds in).
@@ -288,7 +288,7 @@ func commitMetric(ns float64) Metric {
 		Name: "Commit latency (fsync)", Display: durMS(ms), Verdict: v, Note: note,
 		Bar: 1 - normLog(clampLo(ms, 0.05), 0.05, 50), HasBar: true,
 		ScaleLo: "slow", ScaleHi: "fast",
-	}
+	}.cmp(ms, "ms", true)
 }
 
 func durMS(ms float64) string {

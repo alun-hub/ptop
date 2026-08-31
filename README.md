@@ -32,6 +32,20 @@ ptop run all
 
 `--depth` is `quick` (~10s/sub-test), `normal` (default, ~30s) or `deep` (~60s).
 
+### History
+
+Every run (from the TUI or the CLI) is appended to
+`~/.local/share/ptop/history.jsonl` (override with `PTOP_HISTORY`). Each result
+screen shows, per metric, how much faster or slower it is than your previous run
+of the same test on the same host. Browse past runs with:
+
+```sh
+ptop history            # list runs, newest first
+ptop history 2          # show run #2, compared against the run before it
+```
+
+The **History** entry in the TUI menu does the same interactively.
+
 ### Network throughput without iperf3
 
 Run the built-in server on one machine and point the test at it from the other:
@@ -70,11 +84,12 @@ For the best numbers on a server: `dnf install fio sysbench iperf3` (or
 
 ```
 main.go            - argument handling; starts the TUI, the CLI, or `ptop serve`
-cli.go             - "ptop run ..." (non-interactive)
+cli.go             - "ptop run ..." and "ptop history" (non-interactive)
 internal/bench/    - the test engine: one runner per test, streams Events to the UI
   lan.go           - network checks that need nothing on the other end
   serve.go         - `ptop serve` and its throughput client
-internal/ui/       - the Bubble Tea model (menu -> settings -> run -> results)
+internal/history/  - per-run JSONL log, session grouping, run-to-run comparison
+internal/ui/       - the Bubble Tea model (menu -> settings -> run -> results / history)
 contrib/ptop.sh    - the original bash prototype
 ```
 

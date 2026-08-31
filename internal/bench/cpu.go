@@ -165,15 +165,15 @@ func cpuResult(res Result, single, multi float64, threads int) Result {
 		coreDesc = fmt.Sprintf("%d cores / %d threads (SMT)", phys, threads)
 	}
 	res.Metrics = []Metric{
-		{Name: "Single-threaded", Display: fmt.Sprintf("%.0f ops/s", single),
+		Metric{Name: "Single-threaded", Display: fmt.Sprintf("%.0f ops/s", single),
 			Note: "higher = faster per core (web servers, single scripts)",
-			Bar:  relSingle, HasBar: true, ScaleLo: "1 core", ScaleHi: "whole machine"},
-		{Name: fmt.Sprintf("Multi-threaded (%d threads)", threads), Display: fmt.Sprintf("%.0f ops/s", multi),
+			Bar:  relSingle, HasBar: true, ScaleLo: "1 core", ScaleHi: "whole machine"}.cmp(single, "ops/s", false),
+		Metric{Name: fmt.Sprintf("Multi-threaded (%d threads)", threads), Display: fmt.Sprintf("%.0f ops/s", multi),
 			Note: "higher = more total capacity (builds, databases, batch jobs)",
-			Bar:  1, HasBar: true, ScaleLo: "1 core", ScaleHi: "whole machine"},
-		{Name: "Scaling across cores", Display: fmt.Sprintf("%.1fx (%.0f%% efficiency vs %s)", scaling, eff, coreDesc), Verdict: v,
+			Bar:  1, HasBar: true, ScaleLo: "1 core", ScaleHi: "whole machine"}.cmp(multi, "ops/s", false),
+		Metric{Name: "Scaling across cores", Display: fmt.Sprintf("%.1fx (%.0f%% efficiency vs %s)", scaling, eff, coreDesc), Verdict: v,
 			Note: cpuScalingNote(eff, smt), Bar: eff / 100, HasBar: true,
-			ScaleLo: "no benefit", ScaleHi: "full benefit"},
+			ScaleLo: "no benefit", ScaleHi: "full benefit"}.cmp(scaling, "x", false),
 	}
 	res.Summary = fmt.Sprintf("With all %d threads the server is about %.1fx faster than with a single one.", threads, scaling)
 	return res
@@ -213,7 +213,7 @@ func cpuExtras(ctx context.Context, cfg Config) []Metric {
 			Verdict: stealVerdict(steal), Note: stealNote(steal),
 			Bar: 1 - norm(steal, 0, 20), HasBar: true,
 			ScaleLo: "starved", ScaleHi: "no contention",
-		})
+		}.cmp(steal, "%", true))
 	}
 
 	if ns := ctxSwitchNs(ctx); ns > 0 {
@@ -223,7 +223,7 @@ func cpuExtras(ctx context.Context, cfg Config) []Metric {
 			Verdict: ctxSwitchVerdict(us), Note: ctxSwitchNote(us),
 			Bar: 1 - normLog(clampLo(us, 0.2), 0.2, 50), HasBar: true,
 			ScaleLo: "slow", ScaleHi: "fast",
-		})
+		}.cmp(us, "us", true))
 	}
 
 	if r := forkExecRate(ctx); r > 0 {
@@ -232,7 +232,7 @@ func cpuExtras(ctx context.Context, cfg Config) []Metric {
 			Verdict: forkExecVerdict(r), Note: forkExecNote(r),
 			Bar: normLog(clampLo(r, 100), 100, 20000), HasBar: true,
 			ScaleLo: "slow", ScaleHi: "fast",
-		})
+		}.cmp(r, "/s", false))
 	}
 
 	if cfg.Depth == Deep {
@@ -242,7 +242,7 @@ func cpuExtras(ctx context.Context, cfg Config) []Metric {
 				Verdict: thermalVerdict(drop), Note: thermalNote(drop),
 				Bar: 1 - norm(drop, 0, 40), HasBar: true,
 				ScaleLo: "throttling hard", ScaleHi: "no throttling",
-			})
+			}.cmp(100-drop, "% of peak", false))
 		}
 	}
 	return out

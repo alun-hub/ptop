@@ -55,20 +55,20 @@ func runNet(ctx context.Context, cfg Config, out chan<- Event) (Result, error) {
 					Verdict: pingVerdict(avg), Note: pingNote(avg),
 					Bar: 1 - norm(avg, 0, 150), HasBar: true,
 					ScaleLo: "high latency", ScaleHi: "low latency",
-				})
+				}.cmp(avg, "ms", true))
 				metrics = append(metrics, Metric{
 					Name: "Jitter (latency variation)", Display: fmt.Sprintf("%.1f ms", jitter),
 					Verdict: jitterVerdict(jitter), Note: jitterNote(jitter),
 					Bar: 1 - norm(jitter, 0, 20), HasBar: true,
 					ScaleLo: "erratic", ScaleHi: "stable",
-				})
+				}.cmp(jitter, "ms", true))
 			}
 			if m := lossRe.FindStringSubmatch(raw); m != nil {
 				if loss, _ := strconv.ParseFloat(m[1], 64); loss > 0 {
 					metrics = append(metrics, Metric{
 						Name: "Packet loss", Display: fmt.Sprintf("%.0f%%", loss),
 						Verdict: VPoor, Note: "packets are being dropped - unstable connection",
-					})
+					}.cmp(loss, "%", true))
 				}
 			}
 		} else {
@@ -90,7 +90,7 @@ func runNet(ctx context.Context, cfg Config, out chan<- Event) (Result, error) {
 			Note: "time to resolve a domain name (" + probeHost + ")",
 			Bar:  1 - normLog(clampLo(ms, 1), 1, 500), HasBar: true,
 			ScaleLo: "slow", ScaleHi: "fast",
-		})
+		}.cmp(ms, "ms", true))
 	} else {
 		out <- LogLine{Text: "DNS lookup failed: " + err.Error()}
 	}
@@ -110,7 +110,7 @@ func runNet(ctx context.Context, cfg Config, out chan<- Event) (Result, error) {
 			Note: "handshake for one HTTPS connection - every new connection pays this",
 			Bar:  1 - normLog(clampLo(ms, 5), 5, 1000), HasBar: true,
 			ScaleLo: "slow", ScaleHi: "fast",
-		})
+		}.cmp(ms, "ms", true))
 	} else {
 		out <- LogLine{Text: "TLS handshake failed: " + err.Error()}
 	}
@@ -192,7 +192,7 @@ func throughputMetric(name string, mbits float64) Metric {
 		Verdict: linkVerdict(mbits), Note: linkNote(mbits),
 		Bar: normLog(clampLo(mbits, 10), 10, 10000), HasBar: true,
 		ScaleLo: "slow", ScaleHi: "10 Gbit/s",
-	}
+	}.cmp(mbits, "Mbit/s", false)
 }
 
 // sshThroughput pipes 256 MiB of zeros through ssh to a remote 'cat >/dev/null'
