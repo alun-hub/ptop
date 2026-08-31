@@ -90,6 +90,7 @@ Usage:
   ptop history [#]              list past runs, or show one (with % vs the run before)
   ptop history diff <#1> <#2>   compare two runs side-by-side
   ptop history tag <#> [text]   add, update, or clear a tag for a run
+  ptop history rm <#>           delete a run from history
 
 Tests:
   disk   read/write and random I/O

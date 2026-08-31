@@ -202,13 +202,18 @@ ptop/
 ├── internal/
 │   ├── bench/         - Benchmark execution engine & tool drivers
 │   │   ├── disk.go    - Storage I/O tests (fio / dd)
+│   │   ├── meta.go    - Small file metadata tests (create / stat / delete)
+│   │   ├── sqlite.go  - Database ACID transaction tests (SQLite WAL)
 │   │   ├── cpu.go     - CPU compute, scaling & crypto tests (sysbench / built-in)
 │   │   ├── mem.go     - Memory bandwidth & latency tests
 │   │   ├── net.go     - Network latency & throughput tests
 │   │   ├── lan.go     - Local link, gateway & NIC error diagnostics
 │   │   ├── gpu.go     - GPU detection, VRAM & thermal sensors
 │   │   └── serve.go   - Lightweight built-in throughput server (ptop serve)
-│   ├── history/       - JSONL history storage, session grouping, series & delta calculation
+│   ├── history/       - JSONL history storage, session grouping, series, deltas & diffs
+│   │   ├── history.go - History storage, tag updates and session management
+│   │   ├── series.go  - Metric series grouping, statistics and sparklines
+│   │   └── diff.go    - Side-by-side run comparison engine
 │   └── ui/            - Bubble Tea TUI models, view renderers, and Lipgloss theme
 └── assets/            - Documentation screenshots and preview assets
 ```
