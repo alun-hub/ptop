@@ -16,14 +16,14 @@ var (
 	//   colDim  scale labels, meta lines, help             (dimmest)
 	colBg     = lipgloss.Color("#1c1f2e")
 	colHi     = lipgloss.Color("#ffffff")
-	colFg     = lipgloss.Color("#aab2d5")
-	colDim    = lipgloss.Color("#6a7196")
-	colMuted  = lipgloss.Color("#aab2d5") // kept as an alias for colFg
+	colFg     = lipgloss.Color("#dce2f7")
+	colDim    = lipgloss.Color("#9aa6cc")
+	colMuted  = lipgloss.Color("#dce2f7") // kept as an alias for colFg
 	colAccent = lipgloss.Color("#7ee0ff")
 	colGood   = lipgloss.Color("#b6f05f")
-	colOkay   = lipgloss.Color("#ffcf5c")
+	colOkay   = lipgloss.Color("#ffd166")
 	colPoor   = lipgloss.Color("#ff7d99")
-	colTrack  = lipgloss.Color("#333a57")
+	colTrack  = lipgloss.Color("#4e587d")
 
 	styTitle = lipgloss.NewStyle().Bold(true).Foreground(colBg).Background(colAccent).Padding(0, 1)
 	stySub   = lipgloss.NewStyle().Foreground(colDim)

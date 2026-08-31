@@ -775,7 +775,7 @@ func (m Model) metricChart(pts []history.Point, lowerBetter bool) []string {
 	tc := timeserieslinechart.New(w, h,
 		timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return compactNum(v) }),
 	)
-	tc.SetStyle(lipgloss.NewStyle().Foreground(colAccent))
+	tc.SetStyle(lipgloss.NewStyle().Foreground(colGood))
 	tc.AxisStyle = lipgloss.NewStyle().Foreground(colDim)
 	tc.LabelStyle = lipgloss.NewStyle().Foreground(colDim)
 	for _, p := range pts {
