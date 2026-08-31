@@ -140,6 +140,12 @@ func diskFio(ctx context.Context, cfg Config, dir string, out chan<- Event) (Res
 	if fsErr != nil {
 		out <- LogLine{Text: "fsync test skipped: " + fsErr.Error()}
 	}
+	out <- Progress{Frac: 0.80, Label: "fsync test done"}
+
+	metaMetrics, metaErr := diskMetadata(ctx, cfg, dir, out)
+	if metaErr != nil {
+		out <- LogLine{Text: "metadata test skipped: " + metaErr.Error()}
+	}
 	out <- Progress{Frac: 1, Label: "done"}
 
 	wMBs := jw.Write.BW / 1024
@@ -161,6 +167,9 @@ func diskFio(ctx context.Context, cfg Config, dir string, out chan<- Event) (Res
 			lat = jfs.Write.Clat.Mean
 		}
 		res.Metrics = append(res.Metrics, commitMetric(lat))
+	}
+	if metaErr == nil {
+		res.Metrics = append(res.Metrics, metaMetrics...)
 	}
 	res.Summary = diskSummary(wMBs, rMBs)
 	return res, nil
@@ -203,7 +212,7 @@ func diskDD(ctx context.Context, cfg Config, dir string, out chan<- Event) (Resu
 	if werr != nil {
 		return res, werr
 	}
-	out <- Progress{Frac: 0.5, Label: "write done"}
+	out <- Progress{Frac: 0.40, Label: "write done"}
 
 	dropCaches(cfg)
 	stop = timeProgress(out, 10*time.Second, "read")
@@ -215,6 +224,12 @@ func diskDD(ctx context.Context, cfg Config, dir string, out chan<- Event) (Resu
 	if rerr != nil {
 		return res, rerr
 	}
+	out <- Progress{Frac: 0.80, Label: "read done"}
+
+	metaMetrics, metaErr := diskMetadata(ctx, cfg, dir, out)
+	if metaErr != nil {
+		out <- LogLine{Text: "metadata test skipped: " + metaErr.Error()}
+	}
 	out <- Progress{Frac: 1, Label: "done"}
 
 	wMBs := ddThroughput(wout)
@@ -225,6 +240,9 @@ func diskDD(ctx context.Context, cfg Config, dir string, out chan<- Event) (Resu
 	}
 	if !cfg.IsRoot {
 		res.Metrics[1].Note = "run as root for a fair read test (otherwise the value may come from the RAM cache)"
+	}
+	if metaErr == nil {
+		res.Metrics = append(res.Metrics, metaMetrics...)
 	}
 	res.Summary = diskSummary(wMBs, rMBs) + " Install fio for random I/O (IOPS) and more stable numbers."
 	return res, nil
