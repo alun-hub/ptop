@@ -1,0 +1,4 @@
+bin/
+ptop
+*.tmp
+.ptop-*
