@@ -168,7 +168,7 @@ func runHistory(args []string) int {
 		fmt.Println("\nptop history <#>            show a run (vs the run before it)")
 		fmt.Println("ptop history <area>        a test area's metrics over time  (cpu|disk|mem|net|gpu)")
 		fmt.Println("ptop history <area> <name> one metric's full history")
-		fmt.Println("ptop history rm <#>             delete a run from history")
+		fmt.Println("ptop history rm <#>        delete a run from history")
 		return 0
 	}
 
@@ -180,7 +180,7 @@ func runHistory(args []string) int {
 		var sel *history.Session
 		if n, e := strconv.Atoi(args[1]); e == nil && n >= 1 && n <= len(sessions) {
 			sel = &sessions[n-1]
-		} else {
+		} else if args[1] != "" {
 			for i := range sessions {
 				if strings.HasPrefix(sessions[i].ID, args[1]) {
 					sel = &sessions[i]

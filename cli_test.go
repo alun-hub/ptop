@@ -64,4 +64,14 @@ func TestCLIHistoryRMErrors(t *testing.T) {
 	if rc := runHistory([]string{"rm", "99"}); rc != 2 {
 		t.Fatalf("expected exit code 2 on nonexistent run, got %d", rc)
 	}
+
+	// Empty prefix
+	if rc := runHistory([]string{"rm", ""}); rc != 2 {
+		t.Fatalf("expected exit code 2 on empty arg, got %d", rc)
+	}
+
+	recs, _ := history.Load()
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 record preserved after invalid rm, got %d", len(recs))
+	}
 }
