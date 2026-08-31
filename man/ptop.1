@@ -1,0 +1,203 @@
+.TH PTOP 1 "2026-08-31" "ptop" "User Commands"
+.SH NAME
+ptop \- guided performance measurement and benchmarking for Linux servers
+.SH SYNOPSIS
+.B ptop
+.br
+.B ptop run
+.I test
+[\fB\-\-depth\fR \fIquick\fR|\fInormal\fR|\fIdeep\fR]
+[\fB\-\-path\fR \fIDIR\fR]
+[\fB\-\-host\fR \fIHOST\fR]
+[\fB\-\-url\fR \fIURL\fR]
+[\fB\-\-port\fR \fIPORT\fR]
+.br
+.B ptop serve
+[\fIADDR\fR]
+.br
+.B ptop history
+[\fI#\fR | \fIarea\fR [\fImetric\fR] [\fIall\fR] | \fIrm\fR \fI#\fR|\fIsession-id\fR]
+.br
+.B ptop \-\-help
+.br
+.B ptop \-\-version
+.SH DESCRIPTION
+\fBptop\fR is a modern, \fBbtop\fR-style terminal benchmarking tool that walks users through server performance evaluations with sensible defaults, plain-language interpretation of every metric, and historical run-to-run tracking.
+.PP
+When invoked without arguments, \fBptop\fR starts an interactive terminal user interface (TUI) powered by Charm Bubble Tea and Lipgloss. For automated environments, scripting, or SSH sessions without a TTY, the non-interactive \fBrun\fR and \fBhistory\fR subcommands provide formatted CLI output.
+.SH COMMANDS
+.TP
+.B (no arguments)
+Launch the full-screen interactive TUI.
+.TP
+.B run \fItest\fR [\fIoptions\fR]
+Execute one or all benchmark tests non-interactively, printing formatted metric values, verdicts, and historical deltas to standard output.
+.TP
+.B serve [\fIaddr\fR]
+Start the lightweight built-in TCP throughput server on the specified address (default: \fI:5330\fR). Used as a peer for the network bandwidth test.
+.TP
+.B history [\fIargs\fR]
+Browse, inspect, or manage historical benchmark runs saved in the JSONL history log.
+.TP
+.B \-h\fR, \fB\-\-help\fR, \fBhelp
+Display help summary and usage instructions.
+.TP
+.B \-\-version\fR, \fBversion
+Display version information.
+.SH TEST SUITES
+The \fItest\fR argument for \fBptop run\fR can be one of:
+.TP
+.B disk
+Measures sequential read/write throughput, 4 KiB random IOPS, 99th percentile read latency, and fsync/commit latency. Prefers \fBfio\fR when installed, falling back to direct I/O with \fBdd\fR.
+.TP
+.B cpu
+Measures single-core and multi-core compute throughput, SMT core scaling efficiency, AES-256-GCM encryption throughput, compression rate, fork/exec process creation rate, hypervisor steal time, context switch latency, and thermal throttling (on deep runs). Prefers \fBsysbench\fR when installed, falling back to built-in prime computations.
+.TP
+.B mem
+Measures memory write bandwidth, random-access latency (pointer chasing), available RAM, and NUMA node topology. Prefers \fBsysbench\fR, falling back to built-in memory copy routines.
+.TP
+.B net
+Evaluates round-trip latency, jitter, packet loss, DNS resolution speed, TCP and TLS handshake durations, LAN gateway latency, network interface error counters, and network throughput. Bandwidth is measured against \fBptop serve\fR, \fBiperf3\fR, SSH, or a public HTTP CDN download. When executed as root, also estimates gateway flood-ping throughput without requiring an external peer.
+.TP
+.B gpu
+Inspects installed GPU hardware, available VRAM, current utilization, and temperature (using \fBnvidia-smi\fR or DRM sysfs). Runs an OpenGL benchmark if \fBglmark2\fR is installed.
+.TP
+.B all
+Runs all five benchmark suites (disk, cpu, mem, net, gpu) in sequence.
+.SH OPTIONS
+.TP
+\fB\-\-depth\fR \fIquick\fR|\fInormal\fR|\fIdeep\fR
+Adjusts test thoroughness and duration:
+.RS
+.IP \(bu 2
+\fBquick\fR: ~10 seconds per test, ideal for rapid sanity checks.
+.IP \(bu 2
+\fBnormal\fR: ~30 seconds per test (default), balancing speed and metric stability.
+.IP \(bu 2
+\fBdeep\fR: ~60 seconds per test, providing maximum measurement stability and stress checks (e.g. CPU thermal throttling).
+.RE
+.TP
+\fB\-\-path\fR \fIDIR\fR
+Specifies the target directory for disk benchmark read/write files (default: current working directory). Test files are automatically deleted upon completion.
+.TP
+\fB\-\-host\fR \fIHOST\fR
+Specifies a remote peer server for the network throughput test. The peer should be running \fBptop serve\fR, \fBiperf3 \-s\fR, or be reachable via SSH with public key authentication.
+.TP
+\fB\-\-url\fR \fIURL\fR
+Specifies a custom HTTP/HTTPS URL for the network download throughput test.
+.TP
+\fB\-\-port\fR \fIPORT\fR
+Specifies the TCP port of \fBptop serve\fR on the remote host (default: \fI5330\fR).
+.SH INTERACTIVE TUI
+The interactive interface provides an intuitive keyboard-driven workflow:
+.TP
+.B Navigation
+.BR Up / Down " or " k / j " move between menu items, fields, and options."
+.BR Enter " selects an option, starts a test, or opens a run/metric detail view."
+.BR Esc " goes back to the previous screen or menu."
+.BR q " quits the application (or cancels an in-progress test)."
+.TP
+.B Settings Screen
+Use \fBLeft\fR/\fBRight\fR or \fBh\fR/\fBl\fR to adjust test depth and target directory. Press \fBEnter\fR on the host field to type a network peer address.
+.TP
+.B Results Screen
+Use \fBLeft\fR/\fBRight\fR to switch tabs between tests when running multiple benchmarks. \fBUp\fR/\fBDown\fR or \fBPgUp\fR/\fBPgDn\fR scrolls long result sets.
+.TP
+.B History Screens
+.RS
+.IP \(bu 2
+\fBRecent runs\fR: Lists previous benchmark sessions with timestamps, hostnames, and test suites.
+.IP \(bu 2
+\fBDelete run (\fId\fB)\fR: Pressing \fBd\fR on a selected run prompts for deletion with an inline confirmation (\fBy\fR to confirm, \fBn\fR/\fBEsc\fR to cancel).
+.IP \(bu 2
+\fBTest Area Overviews\fR: View metrics for a specific test category with trend sparklines. Press \fBh\fR to toggle filtering by local host or all recorded hosts.
+.IP \(bu 2
+\fBMetric Line Charts\fR: Selecting a metric renders a full Braille time-series line chart and a historical run-by-run delta table.
+.RE
+.SH HISTORY MANAGEMENT
+Every successful test run is persisted as a JSON record in the local history log file.
+.PP
+CLI history subcommands:
+.TP
+.B ptop history
+List all recorded benchmark sessions with ID, timestamp, host, test depth, and executed tests.
+.TP
+.B ptop history \fI#\fR
+Display full results for run number \fI#\fR, including metric deltas compared to the run preceding it.
+.TP
+.B ptop history \fIarea\fR [\fIall\fR]
+Display all metrics for a test category (\fIdisk\fR, \fIcpu\fR, \fImem\fR, \fInet\fR, \fIgpu\fR) with sparkline trends. Append \fIall\fR to include results from all hosts.
+.TP
+.B ptop history \fIarea\fR "\fImetric\fR"
+Display the complete run-by-run measurement history and sparkline for a specific metric.
+.TP
+.B ptop history rm \fI#\fR|\fIsession-id\fR
+Delete a benchmark run from history by 1-based index number or session ID prefix.
+.SH ENVIRONMENT
+.TP
+.B PTOP_HISTORY
+Override the filesystem path to the JSONL history file (default: \fI$XDG_DATA_HOME/ptop/history.jsonl\fR or \fI~/.local/share/ptop/history.jsonl\fR).
+.TP
+.B XDG_DATA_HOME
+Base directory for user data files.
+.SH FILES
+.TP
+.I ~/.local/share/ptop/history.jsonl
+Default history log file containing recorded benchmark runs in JSON Lines format.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Test execution failure, benchmark error, or history operational failure.
+.TP
+.B 2
+Invalid command-line arguments, unknown flags, or non-existent benchmark runs.
+.SH EXAMPLES
+Start interactive benchmarking:
+.PP
+.RS
+.nf
+$ ptop
+.fi
+.RE
+.PP
+Run CPU and disk tests non-interactively with deep analysis:
+.PP
+.RS
+.nf
+$ ptop run cpu --depth deep
+$ ptop run disk --path /mnt/fast-nvme
+.fi
+.RE
+.PP
+Run network test against a server running \fBptop serve\fR:
+.PP
+.RS
+.nf
+# On server (192.168.1.10):
+$ ptop serve
+
+# On client:
+$ ptop run net --host 192.168.1.10
+.fi
+.RE
+.PP
+Browse and manage benchmark history:
+.PP
+.RS
+.nf
+$ ptop history
+$ ptop history cpu
+$ ptop history disk "random read"
+$ ptop history rm 3
+.fi
+.RE
+.SH AUTHORS
+Andreas Lundqvist <andreas.lundqvist@gmail.com> and contributors.
+.SH SEE ALSO
+.BR btop (1),
+.BR fio (1),
+.BR sysbench (1),
+.BR iperf3 (1)
