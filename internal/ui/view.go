@@ -76,6 +76,18 @@ func rootTag(root bool) string {
 }
 
 func (m Model) footer() string {
+	if m.confirmDel != "" && (m.scr == scrHistory || m.scr == scrHistoryView) {
+		timeStr := ""
+		for _, r := range m.hist {
+			if r.Session == m.confirmDel {
+				timeStr = r.Time.Local().Format("2006-01-02 15:04:05")
+				break
+			}
+		}
+		prompt := "Delete run " + timeStr + "?   " + styKey.Render("y") + " confirm   ·   " + styKey.Render("n") + "/" + styKey.Render("esc") + " cancel"
+		return stySub.Render(strings.Repeat("─", m.width())) + "\n" + lipgloss.NewStyle().Foreground(colPoor).Bold(true).Render("▶ ") + prompt
+	}
+
 	var keys string
 	switch m.scr {
 	case scrMenu:
@@ -91,9 +103,9 @@ func (m Model) footer() string {
 	case scrHistArea:
 		keys = "↑/↓ select   ⏎ open   esc menu   q quit"
 	case scrHistory:
-		keys = "↑/↓ select   ⏎ open   esc back   q quit"
+		keys = "↑/↓ select   ⏎ open   r delete   esc back   q quit"
 	case scrHistoryView:
-		keys = "↑/↓ scroll   esc back to list   q quit"
+		keys = "↑/↓ scroll   r delete   esc back to list   q quit"
 	case scrHistOverview:
 		keys = "↑/↓ metric   ⏎ chart   h hosts   esc back   q quit"
 	case scrHistMetric:

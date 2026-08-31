@@ -131,3 +131,37 @@ func TestHistoryViewDeleteKeyFlow(t *testing.T) {
 		t.Fatalf("expected m.hist to be empty, got %d records", len(m.hist))
 	}
 }
+
+func TestHistoryFooterConfirmRender(t *testing.T) {
+	m := New()
+	m.w, m.h = 100, 40
+	m.scr = scrHistory
+	m.confirmDel = "some-session-id"
+
+	out := m.View()
+	if !strings.Contains(out, "Delete run") || !strings.Contains(out, "y confirm") {
+		t.Fatalf("expected delete confirmation in footer, got:\n%s", out)
+	}
+
+	// Normal footer should contain "r delete"
+	m.confirmDel = ""
+	outNormal := m.View()
+	if !strings.Contains(outNormal, "r delete") {
+		t.Fatalf("expected r delete in history footer, got:\n%s", outNormal)
+	}
+
+	// In scrHistoryView with confirmDel
+	m.scr = scrHistoryView
+	m.confirmDel = "some-session-id"
+	outView := m.View()
+	if !strings.Contains(outView, "Delete run") || !strings.Contains(outView, "y confirm") {
+		t.Fatalf("expected delete confirmation in history view footer, got:\n%s", outView)
+	}
+
+	// Normal footer for scrHistoryView
+	m.confirmDel = ""
+	outViewNormal := m.View()
+	if !strings.Contains(outViewNormal, "r delete") {
+		t.Fatalf("expected r delete in history view footer, got:\n%s", outViewNormal)
+	}
+}
