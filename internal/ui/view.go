@@ -103,9 +103,9 @@ func (m Model) footer() string {
 	case scrHistArea:
 		keys = "↑/↓ select   ⏎ open   esc menu   q quit"
 	case scrHistory:
-		keys = "↑/↓ select   ⏎ open   r delete   esc back   q quit"
+		keys = "↑/↓ select   ⏎ open   d delete   esc back   q quit"
 	case scrHistoryView:
-		keys = "↑/↓ scroll   r delete   esc back to list   q quit"
+		keys = "↑/↓ scroll   d delete   esc back to list   q quit"
 	case scrHistOverview:
 		keys = "↑/↓ metric   ⏎ chart   h hosts   esc back   q quit"
 	case scrHistMetric:

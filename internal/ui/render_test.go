@@ -70,8 +70,8 @@ func TestHistoryDeleteKeyFlow(t *testing.T) {
 	m.hist, _ = history.Load()
 	m.scr = scrHistory
 
-	// Pressing 'r' should set confirmDel
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	// Pressing 'd' should set confirmDel
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	m = nm.(Model)
 	if m.confirmDel != sess {
 		t.Fatalf("expected confirmDel %s, got %s", sess, m.confirmDel)
@@ -84,8 +84,8 @@ func TestHistoryDeleteKeyFlow(t *testing.T) {
 		t.Fatalf("expected confirmDel to be cleared, got %s", m.confirmDel)
 	}
 
-	// Pressing 'r' then 'y' deletes the session
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	// Pressing 'd' then 'y' deletes the session
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	m = nm.(Model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m = nm.(Model)
@@ -111,8 +111,8 @@ func TestHistoryViewDeleteKeyFlow(t *testing.T) {
 	m.hview = &sessions[0]
 	m.scr = scrHistoryView
 
-	// Pressing 'r' sets confirmDel
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	// Pressing 'd' sets confirmDel
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	m = nm.(Model)
 	if m.confirmDel != sess {
 		t.Fatalf("expected confirmDel %s, got %s", sess, m.confirmDel)
@@ -143,11 +143,11 @@ func TestHistoryFooterConfirmRender(t *testing.T) {
 		t.Fatalf("expected delete confirmation in footer, got:\n%s", out)
 	}
 
-	// Normal footer should contain "r delete"
+	// Normal footer should contain "d delete"
 	m.confirmDel = ""
 	outNormal := m.View()
-	if !strings.Contains(outNormal, "r delete") {
-		t.Fatalf("expected r delete in history footer, got:\n%s", outNormal)
+	if !strings.Contains(outNormal, "d delete") {
+		t.Fatalf("expected d delete in history footer, got:\n%s", outNormal)
 	}
 
 	// In scrHistoryView with confirmDel
@@ -161,7 +161,7 @@ func TestHistoryFooterConfirmRender(t *testing.T) {
 	// Normal footer for scrHistoryView
 	m.confirmDel = ""
 	outViewNormal := m.View()
-	if !strings.Contains(outViewNormal, "r delete") {
-		t.Fatalf("expected r delete in history view footer, got:\n%s", outViewNormal)
+	if !strings.Contains(outViewNormal, "d delete") {
+		t.Fatalf("expected d delete in history view footer, got:\n%s", outViewNormal)
 	}
 }

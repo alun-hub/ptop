@@ -280,7 +280,7 @@ func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.hcur < len(sessions)-1 {
 			m.hcur++
 		}
-	case "r":
+	case "d":
 		if m.hcur < len(sessions) {
 			m.confirmDel = sessions[m.hcur].ID
 		}
@@ -416,7 +416,7 @@ func (m Model) updateHistoryView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "esc", "left", "h":
 		m.scr = scrHistory
-	case "r":
+	case "d":
 		if m.hview != nil {
 			m.confirmDel = m.hview.ID
 		}
