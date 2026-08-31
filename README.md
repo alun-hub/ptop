@@ -4,7 +4,23 @@ Guided performance measurement for Linux servers - a `btop`-style terminal UI
 that walks you through disk, CPU, memory and network tests with sensible
 defaults and explains what the numbers mean.
 
-## Build
+## Install
+
+Grab a `.deb`, `.rpm` or `.tar.gz` for `amd64`/`arm64` from the
+[latest release](https://github.com/alun-hub/ptop/releases/latest):
+
+```sh
+# Debian / Ubuntu
+sudo dpkg -i ptop_*_linux_amd64.deb
+
+# Fedora / RHEL / openSUSE
+sudo rpm -i ptop_*_linux_amd64.rpm
+```
+
+Packages are built automatically for every release by
+`.github/workflows/release.yml` (GoReleaser).
+
+## Build from source
 
 ```sh
 go build -o bin/ptop .

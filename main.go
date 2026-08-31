@@ -22,6 +22,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// version is set at build time by GoReleaser (-X main.version=...).
+var version = "dev"
+
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -35,7 +38,7 @@ func main() {
 			fmt.Print(usage)
 			return
 		case "--version", "version":
-			fmt.Println("ptop 0.1.0")
+			fmt.Println("ptop " + version)
 			return
 		default:
 			fmt.Fprintf(os.Stderr, "unknown argument: %s\n\n%s", os.Args[1], usage)

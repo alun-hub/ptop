@@ -1,4 +1,7 @@
 bin/
+dist/
 ptop
 *.tmp
 .ptop-*
+# fio test data files (also cleaned up by the disk test itself)
+*.0.0

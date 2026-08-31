@@ -76,6 +76,15 @@ func fioRun(ctx context.Context, out chan<- Event, dir, name string, secs int, t
 	}
 	args = append(args, extra...)
 	out <- LogLine{Text: "fio " + strings.Join(args, " ")}
+	// fio names its data files "<jobname>.<n>.<m>" in --directory and does not
+	// delete them; clean them up ourselves.
+	defer func() {
+		if files, _ := filepath.Glob(filepath.Join(dir, name+".*.*")); files != nil {
+			for _, f := range files {
+				_ = os.Remove(f)
+			}
+		}
+	}()
 	rawB, err := exec.CommandContext(ctx, "fio", args...).CombinedOutput()
 	raw := string(rawB)
 	if err != nil {
