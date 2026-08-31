@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,7 +91,80 @@ func lanMetrics(ctx context.Context, out chan<- Event, cfg Config) []Metric {
 			})
 		}
 	}
+
+	// Rough throughput with no cooperating peer: a burst of large ICMP echoes
+	// to the gateway. Needs root (large preload) and underestimates fast links
+	// because it is still round-trip and lightly pipelined.
+	if gw != "" && have("ping") && !cfg.IsRoot && cfg.Depth != Quick {
+		out <- LogLine{Text: "run ptop as root for a rough throughput estimate (flood ping to the gateway)"}
+	}
+	if gw != "" && have("ping") && cfg.IsRoot && cfg.Depth != Quick {
+		out <- Progress{Frac: 0.6, Label: "throughput estimate (flood ping)"}
+		if mbits, ok := floodPingMbits(ctx, gw); ok {
+			ms = append(ms, Metric{
+				Name: "Throughput estimate (flood ping)", Display: fmt.Sprintf("~%.0f Mbit/s", mbits),
+				Verdict: floodVerdict(mbits), Note: floodNote(mbits),
+				Bar: normLog(clampLo(mbits, 10), 10, 1000), HasBar: true,
+				ScaleLo: "slow", ScaleHi: "1 Gbit+",
+			})
+		}
+	}
 	return ms
+}
+
+var (
+	pingRecvRe = regexp.MustCompile(`(\d+) packets transmitted, (\d+) (?:packets )?received`)
+	pingTimeRe = regexp.MustCompile(`time (\d+)ms`)
+)
+
+// floodPingMbits sends a burst of large ICMP echoes to host and estimates the
+// link rate from bytes moved (request + reply both cross the local hop) over
+// wall time. Root only.
+func floodPingMbits(ctx context.Context, host string) (float64, bool) {
+	c, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	const count, size = 250, 65000
+	// -f (flood) sends the next echo as soon as a reply arrives, keeping a
+	// dozen-odd packets in flight - enough to be partly bandwidth-bound.
+	raw, _ := exec.CommandContext(c, "ping", "-q", "-n", "-f",
+		"-c", strconv.Itoa(count), "-s", strconv.Itoa(size),
+		"-W", "1", host).CombinedOutput()
+
+	rm := pingRecvRe.FindStringSubmatch(string(raw))
+	tm := pingTimeRe.FindStringSubmatch(string(raw))
+	if rm == nil || tm == nil {
+		return 0, false
+	}
+	recv, _ := strconv.Atoi(rm[2])
+	ms, _ := strconv.ParseFloat(tm[1], 64)
+	if recv < count/4 || ms <= 0 {
+		return 0, false
+	}
+	// each successful echo: (size + 28) bytes out and the same back
+	bytes := float64(recv) * float64(size+28) * 2
+	return bytes * 8 / (ms / 1000) / 1e6, true
+}
+
+func floodVerdict(mbits float64) Verdict {
+	switch {
+	case mbits >= 500:
+		return VGood
+	case mbits >= 80:
+		return VOkay
+	default:
+		return VPoor
+	}
+}
+func floodNote(mbits float64) string {
+	base := "rough round-trip estimate - a real gigabit link often reads 400-700 here. "
+	switch {
+	case mbits >= 500:
+		return base + "consistent with a gigabit-or-faster link"
+	case mbits >= 80:
+		return base + "looks like ~100 Mbit, a saturated link, or wifi"
+	default:
+		return base + "low - slow link, heavy loss, or a rate-limiting gateway"
+	}
 }
 
 // defaultRoute reads /proc/net/route and returns the default gateway IP and its

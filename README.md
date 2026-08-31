@@ -46,7 +46,9 @@ ptop run net --host A
 
 If `ptop serve` is not running, ptop falls back to `iperf3 -s` (if installed),
 then to an ssh-based test (`--host` reachable with key auth), then to a public
-HTTP download. Either way the local-link checks below always run.
+HTTP download. Either way the local-link checks always run, and when ptop runs
+as root the `net` test also prints a rough flood-ping throughput estimate to the
+default gateway (round-trip, so it under-reads fast links) - no peer needed.
 
 ## What it measures
 
@@ -58,7 +60,7 @@ ptop works on a bare server:
 | disk | `fio` | `dd` with O_DIRECT | sequential read/write, 4 KiB random IOPS, p99 read latency, fsync/commit latency |
 | cpu  | `sysbench` | built-in prime test | single- & multi-thread ops/s, scaling vs physical cores (SMT-aware), AES-256-GCM and deflate throughput, fork+exec rate, hypervisor steal, context-switch latency, thermal throttling (deep) |
 | mem  | `sysbench` | built-in copy test | free memory, write bandwidth, random-access latency (pointer chase), NUMA topology |
-| net  | `ping` + `ptop serve` / `iperf3` / ssh | `ping` + HTTP download | latency, jitter, packet loss, DNS lookup, TCP+TLS handshake; LAN latency to gateway, link speed/duplex, NIC error counters, TCP connect latency & handshake rate, path MTU; throughput |
+| net  | `ping` + `ptop serve` / `iperf3` / ssh | `ping` + HTTP download | latency, jitter, packet loss, DNS lookup, TCP+TLS handshake; LAN latency to gateway, link speed/duplex, NIC error counters, TCP connect latency & handshake rate, path MTU, flood-ping throughput estimate (root); throughput |
 | gpu  | `nvidia-smi` | `/sys/class/drm` (+ `glmark2` if present) | GPU model, VRAM, utilisation, temperature; OpenGL score when glmark2 is installed |
 
 For the best numbers on a server: `dnf install fio sysbench iperf3` (or
