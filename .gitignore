@@ -5,3 +5,11 @@ ptop
 .ptop-*
 # fio test data files (also cleaned up by the disk test itself)
 *.0.0
+
+# AI assistant artifacts and configs
+.claude/
+.gemini/
+CLAUDE.md
+GEMINI.md
+docs/superpowers/
+.superpowers/
