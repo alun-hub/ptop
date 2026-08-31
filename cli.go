@@ -89,7 +89,7 @@ func runOne(c bench.Config, session, host, depth string, hist []history.Record) 
 			}
 			base := history.Baseline(hist, c.Kind.String(), host, session)
 			printResult(e.Result, base)
-			if err := history.Save(session, host, depth, e.Result, e.Err); err != nil {
+			if err := history.Save(session, host, depth, "", e.Result, e.Err); err != nil {
 				fmt.Fprintf(os.Stderr, "  (could not save to history: %v)\n", err)
 			}
 		}

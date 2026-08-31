@@ -75,7 +75,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	sess := NewSession()
 	r := bench.Result{Kind: bench.CPU, Tool: "sysbench", Summary: "ok",
 		Metrics: []bench.Metric{{Name: "AES", Display: "1 GB/s", Value: 1000, Unit: "MB/s"}}}
-	if err := Save(sess, "host", "quick", r, nil); err != nil {
+	if err := Save(sess, "host", "quick", "", r, nil); err != nil {
 		t.Fatal(err)
 	}
 	recs, err := Load()
@@ -102,10 +102,10 @@ func TestDeleteSession(t *testing.T) {
 	r1 := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "M1", Value: 10}}}
 	r2 := bench.Result{Kind: bench.Disk, Tool: "test", Metrics: []bench.Metric{{Name: "M2", Value: 20}}}
 
-	if err := Save(sess1, "host1", "quick", r1, nil); err != nil {
+	if err := Save(sess1, "host1", "quick", "", r1, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := Save(sess2, "host1", "quick", r2, nil); err != nil {
+	if err := Save(sess2, "host1", "quick", "", r2, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,3 +134,156 @@ func TestDeleteSession(t *testing.T) {
 		t.Fatalf("DeleteSession nonexistent error: %v", err)
 	}
 }
+
+func TestRecordTagAndSetTag(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PTOP_HISTORY", filepath.Join(dir, "history.jsonl"))
+
+	res := bench.Result{
+		Kind: bench.Disk,
+		Metrics: []bench.Metric{
+			{Name: "Sequential write", Display: "500 MB/s", Value: 500, Unit: "MB/s"},
+		},
+	}
+	sessID := "20260831T200000-abcdef"
+	if err := Save(sessID, "testhost", "normal", "initial-tag", res, nil); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	recs, err := Load()
+	if err != nil || len(recs) != 1 {
+		t.Fatalf("Load failed: %v, len=%d", err, len(recs))
+	}
+	if recs[0].Tag != "initial-tag" {
+		t.Errorf("expected tag 'initial-tag', got %q", recs[0].Tag)
+	}
+
+	sessions := Sessions(recs)
+	if len(sessions) != 1 || sessions[0].Tag != "initial-tag" {
+		t.Errorf("expected session tag 'initial-tag', got %q", sessions[0].Tag)
+	}
+
+	if err := SetTag(sessID, "updated-tag"); err != nil {
+		t.Fatalf("SetTag failed: %v", err)
+	}
+
+	recs2, err := Load()
+	if err != nil || len(recs2) != 1 {
+		t.Fatalf("Load after SetTag failed: %v", err)
+	}
+	if recs2[0].Tag != "updated-tag" {
+		t.Errorf("expected updated tag 'updated-tag', got %q", recs2[0].Tag)
+	}
+
+	// Clearing tag
+	if err := SetTag(sessID, ""); err != nil {
+		t.Fatalf("SetTag to clear tag failed: %v", err)
+	}
+	recs3, err := Load()
+	if err != nil || len(recs3) != 1 {
+		t.Fatalf("Load after clear tag failed: %v", err)
+	}
+	if recs3[0].Tag != "" {
+		t.Errorf("expected empty tag, got %q", recs3[0].Tag)
+	}
+
+	// Non-existent session
+	if err := SetTag("nonexistent", "tag"); err != nil {
+		t.Fatalf("SetTag nonexistent session error: %v", err)
+	}
+}
+
+func TestDiffSessions(t *testing.T) {
+	s1 := Session{
+		ID:   "s1",
+		Host: "testhost",
+		Time: time.Now().Add(-1 * time.Hour),
+		Tag:  "base",
+		Records: []Record{
+			{
+				Kind: "Disk",
+				Metrics: []Metric{
+					{Name: "Sequential write", Display: "500 MB/s", Value: 500, Unit: "MB/s", LowerBetter: false},
+					{Name: "Commit latency", Display: "4.0 ms", Value: 4.0, Unit: "ms", LowerBetter: true},
+					{Name: "Old only", Display: "10 ops/s", Value: 10, Unit: "ops/s"},
+				},
+			},
+			{
+				Kind: "CPU",
+				Metrics: []Metric{
+					{Name: "Single-thread", Display: "1000", Value: 1000, Unit: "events/s"},
+				},
+			},
+		},
+	}
+	s2 := Session{
+		ID:   "s2",
+		Host: "testhost",
+		Time: time.Now(),
+		Tag:  "upgrade",
+		Records: []Record{
+			{
+				Kind: "Disk",
+				Metrics: []Metric{
+					{Name: "Sequential write", Display: "1000 MB/s", Value: 1000, Unit: "MB/s", LowerBetter: false},
+					{Name: "Commit latency", Display: "2.0 ms", Value: 2.0, Unit: "ms", LowerBetter: true},
+					{Name: "New only", Display: "20 ops/s", Value: 20, Unit: "ops/s"},
+				},
+			},
+			{
+				Kind: "Memory",
+				Metrics: []Metric{
+					{Name: "Bandwidth", Display: "25 GB/s", Value: 25, Unit: "GB/s"},
+				},
+			},
+		},
+	}
+
+	diff := DiffSessions(s1, s2)
+	if diff.Base.ID != "s1" || diff.Target.ID != "s2" {
+		t.Fatalf("expected DiffSessions to preserve base and target sessions")
+	}
+
+	// Items should include:
+	// Disk: Sequential write, Commit latency, Old only, New only (4)
+	// CPU: Single-thread (1)
+	// Memory: Bandwidth (1)
+	// Total: 6 items
+	if len(diff.Items) != 6 {
+		t.Fatalf("expected 6 diff items, got %d: %+v", len(diff.Items), diff.Items)
+	}
+
+	// Sequential write: 500 -> 1000 is +100%
+	if diff.Items[0].Delta.Pct != 100 || !diff.Items[0].Delta.Valid {
+		t.Errorf("expected +100%% valid for seq write, got %+v", diff.Items[0].Delta)
+	}
+	if diff.Items[0].BaseDisplay != "500 MB/s" || diff.Items[0].TargDisplay != "1000 MB/s" {
+		t.Errorf("expected display values for seq write, got base=%q, targ=%q", diff.Items[0].BaseDisplay, diff.Items[0].TargDisplay)
+	}
+
+	// Commit latency: 4.0 -> 2.0 (lower is better) is +50% better
+	if diff.Items[1].Delta.Pct != 50 || !diff.Items[1].Delta.Valid {
+		t.Errorf("expected +50%% valid for commit latency, got %+v", diff.Items[1].Delta)
+	}
+
+	// Old only: base has it, target doesn't
+	if diff.Items[2].Name != "Old only" || diff.Items[2].BaseDisplay != "10 ops/s" || diff.Items[2].TargDisplay != "" || diff.Items[2].Delta.Valid {
+		t.Errorf("unexpected Old only item: %+v", diff.Items[2])
+	}
+
+	// New only: target has it, base doesn't
+	if diff.Items[3].Name != "New only" || diff.Items[3].BaseDisplay != "" || diff.Items[3].TargDisplay != "20 ops/s" || diff.Items[3].Delta.Valid {
+		t.Errorf("unexpected New only item: %+v", diff.Items[3])
+	}
+
+	// Single-thread: base only
+	if diff.Items[4].Kind != "CPU" || diff.Items[4].Name != "Single-thread" {
+		t.Errorf("unexpected CPU item: %+v", diff.Items[4])
+	}
+
+	// Bandwidth: memory only
+	if diff.Items[5].Kind != "Memory" || diff.Items[5].Name != "Bandwidth" {
+		t.Errorf("unexpected Memory item: %+v", diff.Items[5])
+	}
+}
+

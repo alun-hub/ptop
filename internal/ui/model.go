@@ -616,7 +616,7 @@ func (m Model) handleEvent(ev bench.Event) (tea.Model, tea.Cmd) {
 			m.cancel = nil
 		}
 		m.results = append(m.results, runResult{res: e.Result, err: e.Err})
-		_ = history.Save(m.session, m.info.Hostname, m.cur.Depth.Token(), e.Result, e.Err)
+		_ = history.Save(m.session, m.info.Hostname, m.cur.Depth.Token(), "", e.Result, e.Err)
 		return m.next()
 	}
 	return m, waitEvent(m.ch)

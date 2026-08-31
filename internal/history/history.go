@@ -26,6 +26,7 @@ type Record struct {
 	Kind    string    `json:"kind"`
 	Depth   string    `json:"depth"`
 	Tool    string    `json:"tool,omitempty"`
+	Tag     string    `json:"tag,omitempty"`
 	Summary string    `json:"summary,omitempty"`
 	Failed  bool      `json:"failed,omitempty"`
 	Error   string    `json:"error,omitempty"`
@@ -64,10 +65,10 @@ func NewSession() string {
 }
 
 // Save appends one test result to the history file.
-func Save(session, host, depth string, r bench.Result, runErr error) error {
+func Save(session, host, depth, tag string, r bench.Result, runErr error) error {
 	rec := Record{
 		Time: time.Now().UTC(), Session: session, Host: host,
-		Kind: r.Kind.String(), Depth: depth, Tool: r.Tool, Summary: r.Summary,
+		Kind: r.Kind.String(), Depth: depth, Tool: r.Tool, Tag: tag, Summary: r.Summary,
 	}
 	if runErr != nil {
 		rec.Failed = true
@@ -173,12 +174,67 @@ func DeleteSession(sessionID string) error {
 	return os.Rename(tmpName, p)
 }
 
+// SetTag updates or clears the tag on all records for the given session ID.
+func SetTag(sessionID, tag string) error {
+	recs, err := Load()
+	if err != nil {
+		return err
+	}
+	p := Path()
+	var modified bool
+	for i := range recs {
+		if recs[i].Session == sessionID {
+			if recs[i].Tag != tag {
+				recs[i].Tag = tag
+				modified = true
+			}
+		}
+	}
+	if !modified {
+		return nil
+	}
+
+	dir := filepath.Dir(p)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	tmpFile, err := os.CreateTemp(dir, "history-*.jsonl.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmpFile.Name()
+	defer func() {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpName)
+	}()
+
+	for _, r := range recs {
+		b, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		if _, err := tmpFile.Write(append(b, '\n')); err != nil {
+			return err
+		}
+	}
+	if err := tmpFile.Sync(); err != nil {
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpName, p)
+}
+
 // Session groups the records written together by one invocation.
 type Session struct {
 	ID      string
 	Time    time.Time
 	Host    string
 	Depth   string
+	Tag     string
 	Records []Record
 }
 
@@ -189,12 +245,15 @@ func Sessions(recs []Record) []Session {
 	for _, r := range recs {
 		s := byID[r.Session]
 		if s == nil {
-			s = &Session{ID: r.Session, Time: r.Time, Host: r.Host, Depth: r.Depth}
+			s = &Session{ID: r.Session, Time: r.Time, Host: r.Host, Depth: r.Depth, Tag: r.Tag}
 			byID[r.Session] = s
 			order = append(order, r.Session)
 		}
 		if r.Time.Before(s.Time) {
 			s.Time = r.Time
+		}
+		if r.Tag != "" {
+			s.Tag = r.Tag
 		}
 		s.Records = append(s.Records, r)
 	}

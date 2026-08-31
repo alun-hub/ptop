@@ -14,7 +14,7 @@ func TestCLIHistoryRM(t *testing.T) {
 
 	sess := history.NewSession()
 	r := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "X", Value: 1}}}
-	_ = history.Save(sess, "host", "normal", r, nil)
+	_ = history.Save(sess, "host", "normal", "", r, nil)
 
 	rc := runHistory([]string{"rm", "1"})
 	if rc != 0 {
@@ -33,7 +33,7 @@ func TestCLIHistoryDeleteByPrefix(t *testing.T) {
 
 	sess := history.NewSession()
 	r := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "X", Value: 1}}}
-	_ = history.Save(sess, "host", "normal", r, nil)
+	_ = history.Save(sess, "host", "normal", "", r, nil)
 
 	prefix := sess[:8]
 	rc := runHistory([]string{"delete", prefix})
@@ -53,7 +53,7 @@ func TestCLIHistoryRMErrors(t *testing.T) {
 
 	sess := history.NewSession()
 	r := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "X", Value: 1}}}
-	_ = history.Save(sess, "host", "normal", r, nil)
+	_ = history.Save(sess, "host", "normal", "", r, nil)
 
 	// Missing arg
 	if rc := runHistory([]string{"rm"}); rc != 2 {

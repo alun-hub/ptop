@@ -64,7 +64,7 @@ func TestHistoryDeleteKeyFlow(t *testing.T) {
 
 	sess := history.NewSession()
 	r := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "X", Value: 1}}}
-	_ = history.Save(sess, "host", "normal", r, nil)
+	_ = history.Save(sess, "host", "normal", "", r, nil)
 
 	m := New()
 	m.hist, _ = history.Load()
@@ -103,7 +103,7 @@ func TestHistoryViewDeleteKeyFlow(t *testing.T) {
 
 	sess := history.NewSession()
 	r := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "X", Value: 1}}}
-	_ = history.Save(sess, "host", "normal", r, nil)
+	_ = history.Save(sess, "host", "normal", "", r, nil)
 
 	m := New()
 	m.hist, _ = history.Load()
