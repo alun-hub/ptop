@@ -30,6 +30,8 @@ func (m Model) View() string {
 		body = m.viewHistory()
 	case scrHistoryView:
 		body = m.viewHistoryView()
+	case scrHistDiff:
+		body = m.viewHistDiff()
 	case scrHistOverview:
 		body = m.viewHistOverview()
 	case scrHistMetric:
@@ -88,6 +90,11 @@ func (m Model) footer() string {
 		return stySub.Render(strings.Repeat("─", m.width())) + "\n" + lipgloss.NewStyle().Foreground(colPoor).Bold(true).Render("▶ ") + prompt
 	}
 
+	if m.editingTag {
+		keys := "⏎ save tag   esc cancel"
+		return stySub.Render(strings.Repeat("─", m.width())) + "\n" + styHelp.Render(keys)
+	}
+
 	var keys string
 	switch m.scr {
 	case scrMenu:
@@ -103,9 +110,15 @@ func (m Model) footer() string {
 	case scrHistArea:
 		keys = "↑/↓ select   ⏎ open   esc menu   q quit"
 	case scrHistory:
-		keys = "↑/↓ select   ⏎ open   d delete   esc back   q quit"
+		if m.diffBase != nil {
+			keys = "c/⏎ compare with selected   space cancel base   esc clear"
+		} else {
+			keys = "↑/↓ select   ⏎ view   t tag   space/c diff   d delete   esc back   q quit"
+		}
 	case scrHistoryView:
 		keys = "↑/↓ scroll   d delete   esc back to list   q quit"
+	case scrHistDiff:
+		keys = "↑/↓ scroll   esc back to list   q quit"
 	case scrHistOverview:
 		keys = "↑/↓ metric   ⏎ chart   h hosts   esc back   q quit"
 	case scrHistMetric:
@@ -444,11 +457,35 @@ func (m Model) viewHistory() string {
 			marker = styKey.Render("▶ ")
 			nameSty = styMetric
 		}
-		line := fmt.Sprintf("%s%s  %s  %s",
-			marker,
-			nameSty.Render(s.Time.Local().Format("2006-01-02 15:04")),
-			stySub.Render(padRight(trim(s.Host, 16), 16)),
-			stySub.Render(strings.Join(s.Kinds(), ", ")))
+
+		baseBadge := ""
+		if m.diffBase != nil && m.diffBase.ID == s.ID {
+			baseBadge = "  " + lipgloss.NewStyle().Foreground(colGood).Bold(true).Render("[✓ Base]")
+		}
+
+		var line string
+		if m.editingTag && i == m.hcur {
+			line = fmt.Sprintf("%s%s  %s  Tag: %s%s",
+				marker,
+				nameSty.Render(s.Time.Local().Format("2006-01-02 15:04")),
+				stySub.Render(padRight(cut(s.Host, 14), 14)),
+				m.tagInput.View(),
+				baseBadge,
+			)
+		} else {
+			tagStr := ""
+			if s.Tag != "" {
+				tagStr = "  " + lipgloss.NewStyle().Foreground(colAccent).Render(fmt.Sprintf("%q", s.Tag))
+			}
+			line = fmt.Sprintf("%s%s  %s  %s%s%s",
+				marker,
+				nameSty.Render(s.Time.Local().Format("2006-01-02 15:04")),
+				stySub.Render(padRight(cut(s.Host, 14), 14)),
+				stySub.Render(strings.Join(s.Kinds(), ", ")),
+				tagStr,
+				baseBadge,
+			)
+		}
 		rows = append(rows, line)
 	}
 	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
@@ -492,8 +529,16 @@ func (m Model) historyLines() []string {
 		}
 	}
 	var rows []string
-	rows = append(rows, styHead.Render("Run "+s.Time.Local().Format("2006-01-02 15:04:05")),
-		stySub.Render(s.Host+" · depth "+s.Depth), "")
+	head := "Run " + s.Time.Local().Format("2006-01-02 15:04:05")
+	if s.Tag != "" {
+		head += fmt.Sprintf("  (%q)", s.Tag)
+	}
+	sub := s.Host + " · depth " + s.Depth
+	if s.Tag != "" {
+		sub += " · tag: " + s.Tag
+	}
+	rows = append(rows, styHead.Render(head),
+		stySub.Render(sub), "")
 	for _, r := range s.Records {
 		rows = append(rows, styMetric.Render(strings.ToUpper(r.Kind)))
 		if r.Tool != "" {
@@ -517,6 +562,127 @@ func (m Model) historyLines() []string {
 			rows = append(rows, stySub.Render(wrap("  → "+r.Summary, m.width()-6)))
 		}
 		rows = append(rows, "")
+	}
+	return rows
+}
+
+func (m Model) viewHistDiff() string {
+	if m.diffBase == nil || m.diffTarget == nil {
+		return styPanel.Width(m.width()).Render(stySub.Render("No sessions selected for comparison."))
+	}
+	rows := m.histDiffLines()
+	avail := m.bodyHeight()
+	hint := ""
+	if len(rows) > avail {
+		maxS := len(rows) - avail
+		s := m.scroll
+		if s > maxS {
+			s = maxS
+		}
+		rows = rows[s : s+avail]
+		if s > 0 && s < maxS {
+			hint = "  ▲▼ scroll"
+		} else if s < maxS {
+			hint = "  ▼ more below"
+		} else {
+			hint = "  ▲ top hidden"
+		}
+	}
+	body := styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+	if hint != "" {
+		body += "\n" + stySub.Render(hint)
+	}
+	return body
+}
+
+func (m Model) histDiffLines() []string {
+	if m.diffBase == nil || m.diffTarget == nil {
+		return []string{stySub.Render("No sessions selected for comparison.")}
+	}
+	diff := history.DiffSessions(*m.diffBase, *m.diffTarget)
+
+	baseTag := ""
+	if m.diffBase.Tag != "" {
+		baseTag = fmt.Sprintf(" (%q)", m.diffBase.Tag)
+	}
+	targTag := ""
+	if m.diffTarget.Tag != "" {
+		targTag = fmt.Sprintf(" (%q)", m.diffTarget.Tag)
+	}
+
+	header := fmt.Sprintf("Diff: %s%s vs %s%s",
+		m.diffBase.Time.Local().Format("2006-01-02 15:04"),
+		baseTag,
+		m.diffTarget.Time.Local().Format("2006-01-02 15:04"),
+		targTag,
+	)
+
+	sub := fmt.Sprintf("Base: %s (%s)   Target: %s (%s)",
+		m.diffBase.Host, m.diffBase.Depth, m.diffTarget.Host, m.diffTarget.Depth)
+
+	var rows []string
+	rows = append(rows, styHead.Render(header), stySub.Render(sub), "")
+
+	if len(diff.Items) == 0 {
+		rows = append(rows, stySub.Render("No common metrics found between the two runs."))
+		return rows
+	}
+
+	colAreaW := 10
+	colNameW := 28
+	colValW := 14
+
+	tblHead := fmt.Sprintf("  %s  %s  %s  %s  %s",
+		padRight("Area", colAreaW),
+		padRight("Metric", colNameW),
+		padRight("Base Value", colValW),
+		padRight("Target Value", colValW),
+		"Change",
+	)
+	rows = append(rows, stySub.Render(tblHead))
+
+	currentKind := ""
+	for _, it := range diff.Items {
+		area := ""
+		if !strings.EqualFold(it.Kind, currentKind) {
+			currentKind = it.Kind
+			area = currentKind
+		}
+
+		var changeStyled string
+		if it.Delta.Valid {
+			pctText := fmt.Sprintf("%+.1f%%", it.Delta.Pct)
+			changeStyled = deltaStyle(it.Delta).Render(pctText)
+			if it.Verdict != "" {
+				changeStyled += "  " + histVerdictStyle(it.Verdict).Render("● "+it.Verdict)
+			}
+		} else if it.Verdict != "" {
+			changeStyled = histVerdictStyle(it.Verdict).Render("● " + it.Verdict)
+		} else {
+			changeStyled = stySub.Render("-")
+		}
+
+		baseVal := it.BaseDisplay
+		if baseVal == "" {
+			baseVal = "-"
+		}
+		targVal := it.TargDisplay
+		if targVal == "" {
+			targVal = "-"
+		}
+
+		areaCell := padRight(cut(area, colAreaW), colAreaW)
+		nameCell := padRight(cut(it.Name, colNameW), colNameW)
+		baseCell := padRight(cut(baseVal, colValW), colValW)
+		targCell := padRight(cut(targVal, colValW), colValW)
+
+		row := "  " + styBody.Render(areaCell) + "  " +
+			styMetric.Render(nameCell) + "  " +
+			stySub.Render(baseCell) + "  " +
+			stySub.Render(targCell) + "  " +
+			changeStyled
+
+		rows = append(rows, row)
 	}
 	return rows
 }
@@ -828,6 +994,17 @@ func yesno(b bool) string {
 // ---- small helpers ---------------------------------------------
 
 func has(name string) bool { return bench.HasTool(name) }
+
+func cut(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	if n <= 1 {
+		return string(r[:n])
+	}
+	return string(r[:n-1]) + "…"
+}
 
 func trim(s string, n int) string {
 	if len(s) <= n {

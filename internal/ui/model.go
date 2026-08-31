@@ -25,6 +25,7 @@ const (
 	scrHistArea
 	scrHistory
 	scrHistoryView
+	scrHistDiff
 	scrHistOverview
 	scrHistMetric
 )
@@ -98,6 +99,12 @@ type Model struct {
 	hmName     string // selected metric for the chart screen
 	hAllHosts  bool
 	confirmDel string // session ID pending deletion, or ""
+
+	diffBase     *history.Session
+	diffTarget   *history.Session
+	tagInput     textinput.Model
+	editingTag   bool
+	tagSessionID string
 }
 
 type runResult struct {
@@ -116,18 +123,24 @@ func New() Model {
 	ti.CharLimit = 120
 	ti.Prompt = ""
 
+	tiTag := textinput.New()
+	tiTag.Placeholder = "e.g. Before upgrade"
+	tiTag.CharLimit = 40
+	tiTag.Prompt = ""
+
 	p := progress.New(progress.WithDefaultGradient(), progress.WithWidth(46))
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
 	return Model{
-		info:    info,
-		scr:     scrMenu,
-		depth:   bench.Normal,
-		targets: targets,
-		host:    ti,
-		prog:    p,
-		spin:    sp,
+		info:     info,
+		scr:      scrMenu,
+		depth:    bench.Normal,
+		targets:  targets,
+		host:     ti,
+		tagInput: tiTag,
+		prog:     p,
+		spin:     sp,
 		menu: []menuItem{
 			{kind: bench.Disk, title: "Disk performance", time: "~1-3 min",
 				desc: "How fast the disk reads and writes large files, and how many small\nrandom operations it can handle (important for databases)."},
@@ -181,6 +194,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateHistory(msg)
 		case scrHistoryView:
 			return m.updateHistoryView(msg)
+		case scrHistDiff:
+			return m.updateHistDiff(msg)
 		case scrHistOverview:
 			return m.updateHistOverview(msg)
 		case scrHistMetric:
@@ -266,10 +281,40 @@ func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.editingTag {
+		switch msg.String() {
+		case "enter":
+			_ = history.SetTag(m.tagSessionID, strings.TrimSpace(m.tagInput.Value()))
+			m.hist, _ = history.Load()
+			m.editingTag = false
+			m.tagInput.Blur()
+			return m, nil
+		case "esc":
+			m.editingTag = false
+			m.tagInput.Blur()
+			return m, nil
+		default:
+			var cmd tea.Cmd
+			m.tagInput, cmd = m.tagInput.Update(msg)
+			return m, cmd
+		}
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
-	case "esc", "left":
+	case "esc":
+		if m.diffBase != nil {
+			m.diffBase = nil
+			return m, nil
+		}
+		m.scr = scrHistArea
+		m.hcur = 0
+	case "left":
+		if m.diffBase != nil {
+			m.diffBase = nil
+			return m, nil
+		}
 		m.scr = scrHistArea
 		m.hcur = 0
 	case "up", "k":
@@ -284,12 +329,43 @@ func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.hcur < len(sessions) {
 			m.confirmDel = sessions[m.hcur].ID
 		}
-	case "enter", "right", "l":
+	case "t":
 		if m.hcur < len(sessions) {
 			s := sessions[m.hcur]
-			m.hview = &s
-			m.scroll = 0
-			m.scr = scrHistoryView
+			m.tagSessionID = s.ID
+			m.tagInput.SetValue(s.Tag)
+			m.editingTag = true
+			return m, m.tagInput.Focus()
+		}
+	case " ", "c":
+		if m.hcur < len(sessions) {
+			curSess := sessions[m.hcur]
+			if m.diffBase == nil {
+				s := curSess
+				m.diffBase = &s
+			} else if m.diffBase.ID == curSess.ID {
+				m.diffBase = nil
+			} else {
+				s := curSess
+				m.diffTarget = &s
+				m.scroll = 0
+				m.scr = scrHistDiff
+			}
+		}
+	case "enter", "right", "l":
+		if m.hcur < len(sessions) {
+			curSess := sessions[m.hcur]
+			if m.diffBase != nil && m.diffBase.ID != curSess.ID {
+				s := curSess
+				m.diffTarget = &s
+				m.scroll = 0
+				m.scr = scrHistDiff
+			} else {
+				s := curSess
+				m.hview = &s
+				m.scroll = 0
+				m.scr = scrHistoryView
+			}
 		}
 	}
 	return m, nil
@@ -420,6 +496,52 @@ func (m Model) updateHistoryView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.hview != nil {
 			m.confirmDel = m.hview.ID
 		}
+	case "t":
+		if m.hview != nil {
+			m.tagSessionID = m.hview.ID
+			m.tagInput.SetValue(m.hview.Tag)
+			m.editingTag = true
+			m.scr = scrHistory
+			sessions := history.Sessions(m.hist)
+			for i, s := range sessions {
+				if s.ID == m.hview.ID {
+					m.hcur = i
+					break
+				}
+			}
+			return m, m.tagInput.Focus()
+		}
+	case "c", " ":
+		if m.hview != nil {
+			s := *m.hview
+			m.diffBase = &s
+			m.scr = scrHistory
+		}
+	case "up", "k":
+		m.scroll--
+	case "down", "j":
+		m.scroll++
+	case "pgup", "b":
+		m.scroll -= m.bodyHeight() - 2
+	case "pgdown", "f":
+		m.scroll += m.bodyHeight() - 2
+	}
+	if maxS := len(m.historyLines()) - m.bodyHeight(); m.scroll > maxS {
+		m.scroll = maxS
+	}
+	if m.scroll < 0 {
+		m.scroll = 0
+	}
+	return m, nil
+}
+
+func (m Model) updateHistDiff(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc", "left", "h":
+		m.scr = scrHistory
+		m.scroll = 0
 	case "up", "k":
 		m.scroll--
 	case "down", "j":
@@ -428,8 +550,12 @@ func (m Model) updateHistoryView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.scroll -= m.bodyHeight() - 2
 	case "pgdown", " ", "f":
 		m.scroll += m.bodyHeight() - 2
+	case "home", "g":
+		m.scroll = 0
+	case "end", "G":
+		m.scroll = 1 << 20
 	}
-	if maxS := len(m.historyLines()) - m.bodyHeight(); m.scroll > maxS {
+	if maxS := len(m.histDiffLines()) - m.bodyHeight(); m.scroll > maxS {
 		m.scroll = maxS
 	}
 	if m.scroll < 0 {
