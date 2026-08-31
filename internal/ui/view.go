@@ -116,7 +116,7 @@ func (m Model) footer() string {
 			keys = "↑/↓ select   ⏎ view   t tag   space/c diff   d delete   esc back   q quit"
 		}
 	case scrHistoryView:
-		keys = "↑/↓ scroll   d delete   esc back to list   q quit"
+		keys = "↑/↓ scroll   t tag   c diff base   d delete   esc back to list   q quit"
 	case scrHistDiff:
 		keys = "↑/↓ scroll   esc back to list   q quit"
 	case scrHistOverview:

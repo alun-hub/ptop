@@ -221,6 +221,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case channelClosedMsg:
 		return m, nil
+
+	default:
+		if m.editingTag {
+			var cmd tea.Cmd
+			m.tagInput, cmd = m.tagInput.Update(msg)
+			return m, cmd
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -265,6 +273,9 @@ func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "y", "Y":
 			_ = history.DeleteSession(m.confirmDel)
+			if m.diffBase != nil && m.diffBase.ID == m.confirmDel {
+				m.diffBase = nil
+			}
 			m.hist, _ = history.Load()
 			m.confirmDel = ""
 			newSessions := history.Sessions(m.hist)
@@ -469,6 +480,9 @@ func (m Model) updateHistoryView(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "y", "Y":
 			_ = history.DeleteSession(m.confirmDel)
+			if m.diffBase != nil && m.diffBase.ID == m.confirmDel {
+				m.diffBase = nil
+			}
 			m.hist, _ = history.Load()
 			m.confirmDel = ""
 			m.hview = nil
