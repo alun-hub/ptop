@@ -15,12 +15,17 @@ func TestScreensRender(t *testing.T) {
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(Model)
 
-	screens := []screen{scrMenu, scrConfig, scrPreflight, scrRunning, scrResults, scrHistory, scrHistoryView}
+	screens := []screen{scrMenu, scrConfig, scrPreflight, scrRunning, scrResults,
+		scrHistArea, scrHistory, scrHistoryView, scrHistOverview, scrHistMetric}
 	for _, s := range screens {
 		mm := m
 		mm.scr = s
 		if s == scrRunning {
 			mm.cur = bench.Config{Kind: bench.CPU}
+		}
+		if s == scrHistOverview || s == scrHistMetric {
+			mm.harea = "CPU"
+			mm.hmName = "Single-threaded"
 		}
 		if s == scrResults {
 			mm.results = []runResult{{res: bench.Result{

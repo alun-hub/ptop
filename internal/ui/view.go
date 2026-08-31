@@ -7,6 +7,7 @@ import (
 	"ptop/internal/bench"
 	"ptop/internal/history"
 
+	"github.com/NimbleMarkets/ntcharts/linechart/timeserieslinechart"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -23,10 +24,16 @@ func (m Model) View() string {
 		body = m.viewRunning()
 	case scrResults:
 		body = m.viewResults()
+	case scrHistArea:
+		body = m.viewHistArea()
 	case scrHistory:
 		body = m.viewHistory()
 	case scrHistoryView:
 		body = m.viewHistoryView()
+	case scrHistOverview:
+		body = m.viewHistOverview()
+	case scrHistMetric:
+		body = m.viewHistMetric()
 	}
 	return m.header() + "\n" + body + "\n" + m.footer()
 }
@@ -81,10 +88,16 @@ func (m Model) footer() string {
 		keys = "esc cancel   q quit"
 	case scrResults:
 		keys = "←/→ switch test   ↑/↓ scroll   ⏎ back to menu   q quit"
-	case scrHistory:
+	case scrHistArea:
 		keys = "↑/↓ select   ⏎ open   esc menu   q quit"
+	case scrHistory:
+		keys = "↑/↓ select   ⏎ open   esc back   q quit"
 	case scrHistoryView:
 		keys = "↑/↓ scroll   esc back to list   q quit"
+	case scrHistOverview:
+		keys = "↑/↓ metric   ⏎ chart   h hosts   esc back   q quit"
+	case scrHistMetric:
+		keys = "↑/↓ scroll   h hosts   esc back   q quit"
 	}
 	return stySub.Render(strings.Repeat("─", m.width())) + "\n" + styHelp.Render(keys)
 }
@@ -508,6 +521,298 @@ func histVerdictStyle(label string) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(colDim)
 }
 
+// ---- history: categorised (by test area) ---------------------
+
+func (m Model) viewHistArea() string {
+	if len(m.hist) == 0 {
+		return styPanel.Width(m.width()).Render(stySub.Render(
+			"No history yet.\n\nRun a test - every run is saved to\n" + history.Path()))
+	}
+	choices := m.areaChoices()
+	var rows []string
+	rows = append(rows, styHead.Render("History"),
+		stySub.Render(fmt.Sprintf("%d runs recorded. Pick a test area to see its numbers over time.", len(m.hist))), "")
+	for i, c := range choices {
+		marker, ns := "  ", styItem
+		if i == m.hcur {
+			marker, ns = styKey.Render("▶ "), styMetric
+		}
+		desc := ""
+		if i == 0 {
+			desc = stySub.Render("   full results of each individual run")
+		} else {
+			n := 0
+			for _, r := range m.hist {
+				if !r.Failed && strings.EqualFold(r.Kind, c) {
+					n++
+				}
+			}
+			desc = stySub.Render(fmt.Sprintf("   %d runs", n))
+		}
+		rows = append(rows, marker+ns.Render(padRight(c, 16))+desc)
+	}
+	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+}
+
+func (m Model) viewHistOverview() string {
+	host := m.hostFilter()
+	metrics := history.MetricNames(m.hist, m.harea, host)
+	var rows []string
+	scope := "host: " + m.info.Hostname
+	if m.hAllHosts {
+		scope = "all hosts"
+	}
+	rows = append(rows, styHead.Render(m.harea+" history"))
+	if len(metrics) == 0 {
+		rows = append(rows, "", stySub.Render("No comparable "+m.harea+" metrics recorded for "+scope+"."))
+		return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+	}
+	// window span from the first metric's series
+	span := ""
+	if s := history.Series(m.hist, m.harea, metrics[0].Name, host); len(s) > 0 {
+		span = s[0].Time.Local().Format("Jan 2") + " → " + s[len(s)-1].Time.Local().Format("Jan 2")
+	}
+	rows = append(rows, stySub.Render(span+"  ·  "+scope+"  ·  h toggles hosts  ·  sparkline = oldest→newest"), "")
+
+	nameW := 26
+	sparkW := m.width() - nameW - 32
+	if sparkW < 8 {
+		sparkW = 8
+	}
+	if sparkW > 34 {
+		sparkW = 34
+	}
+	for i, mi := range metrics {
+		pts := history.Series(m.hist, m.harea, mi.Name, host)
+		st := history.Summarize(pts, mi.LowerBetter)
+		marker := "  "
+		nameSty := styBody
+		if i == m.haCur {
+			marker = styKey.Render("▶ ")
+			nameSty = styMetric
+		}
+		latest := ""
+		vsty := stySub
+		if st.N > 0 {
+			latest = st.Last.Display
+			vsty = histVerdictStyle(st.Last.Verdict)
+		}
+		spark := history.Sparkline(pts, sparkW)
+		row := marker + nameSty.Render(padRight(trim(mi.Name, nameW), nameW)) +
+			vsty.Render(padLeft(latest, 13)) + "  " +
+			vsty.Render(spark) + strings.Repeat(" ", max(0, sparkW-lipgloss.Width(spark))) + "  " +
+			trendCell(st)
+		rows = append(rows, strings.TrimRight(row, " "))
+	}
+	rows = append(rows, "", stySub.Render("⏎ opens a full chart for the selected metric."))
+	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+}
+
+func trendCell(st history.Stats) string {
+	if !st.HasWindow {
+		return stySub.Render("first run")
+	}
+	p := st.OverWindowPct
+	txt := fmt.Sprintf("%+.0f%%", p)
+	if p > -1 && p < 1 {
+		txt = "flat"
+	}
+	sty := stySub
+	switch {
+	case p >= 3:
+		sty = lipgloss.NewStyle().Foreground(colGood)
+	case p <= -10:
+		sty = lipgloss.NewStyle().Foreground(colPoor)
+		txt += " ⚠"
+	case p <= -3:
+		sty = lipgloss.NewStyle().Foreground(colOkay)
+	}
+	return sty.Render(txt)
+}
+
+func (m Model) viewHistMetric() string {
+	rows := m.histMetricLines()
+	avail := m.bodyHeight()
+	hint := ""
+	if len(rows) > avail {
+		maxS := len(rows) - avail
+		s := m.scroll
+		if s > maxS {
+			s = maxS
+		}
+		rows = rows[s : s+avail]
+		if s < maxS {
+			hint = "  ▼ more below"
+		} else {
+			hint = "  ▲ top hidden"
+		}
+	}
+	body := styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+	if hint != "" {
+		body += "\n" + stySub.Render(hint)
+	}
+	return body
+}
+
+func (m Model) histMetricLines() []string {
+	host := m.hostFilter()
+	metrics := history.MetricNames(m.hist, m.harea, host)
+	var mi history.MetricInfo
+	for _, x := range metrics {
+		if x.Name == m.hmName {
+			mi = x
+		}
+	}
+	pts := history.Series(m.hist, m.harea, m.hmName, host)
+	st := history.Summarize(pts, mi.LowerBetter)
+
+	scope := "host: " + m.info.Hostname
+	if m.hAllHosts {
+		scope = "all hosts"
+	}
+	unit := mi.Unit
+	if unit == "" {
+		unit = "value"
+	}
+	var rows []string
+	rows = append(rows, styHead.Render(m.harea+" · "+m.hmName),
+		stySub.Render(unit+"  ·  "+scope+"  ·  lower is better: "+yesno(mi.LowerBetter)), "")
+
+	rows = append(rows, m.metricChart(pts, mi.LowerBetter)...)
+	rows = append(rows, "")
+
+	if st.N == 0 {
+		rows = append(rows, stySub.Render("No data for this metric on "+scope+"."))
+		return rows
+	}
+	rows = append(rows,
+		styBody.Render(fmt.Sprintf("latest %s   ·   best %s (%s)   ·   worst %s (%s)",
+			st.Last.Display, st.Max.Display, st.Max.Time.Local().Format("Jan 2"),
+			st.Min.Display, st.Min.Time.Local().Format("Jan 2"))))
+	if mi.LowerBetter {
+		// for lower-better, "best" is the min
+		rows[len(rows)-1] = styBody.Render(fmt.Sprintf("latest %s   ·   best %s (%s)   ·   worst %s (%s)",
+			st.Last.Display, st.Min.Display, st.Min.Time.Local().Format("Jan 2"),
+			st.Max.Display, st.Max.Time.Local().Format("Jan 2")))
+	}
+	deltas := []string{}
+	if st.HasWindow {
+		deltas = append(deltas, fmt.Sprintf("%+.1f%% over the window", st.OverWindowPct))
+	}
+	if st.HasPrevious {
+		deltas = append(deltas, fmt.Sprintf("%+.1f%% vs previous run (%s)",
+			st.VsPreviousPct, pts[len(pts)-2].Time.Local().Format("Jan 2")))
+	}
+	if len(deltas) > 0 {
+		rows = append(rows, styNote.Render(strings.Join(deltas, "   ·   ")))
+	}
+	if st.Last.Note != "" {
+		rows = append(rows, histVerdictStyle(st.Last.Verdict).Render("● "+st.Last.Verdict)+" "+styNote.Render(st.Last.Note))
+	}
+	rows = append(rows, "",
+		stySub.Render(fmt.Sprintf("  %-17s %-14s %-9s %-8s %s", "run", "value", "Δ prev", "verdict", "depth")))
+	for i := len(pts) - 1; i >= 0; i-- {
+		p := pts[i]
+		dprev := ""
+		if i > 0 && pts[i-1].Value != 0 {
+			pc := (p.Value - pts[i-1].Value) / pts[i-1].Value * 100
+			if mi.LowerBetter {
+				pc = -pc
+			}
+			dprev = fmt.Sprintf("%+.1f%%", pc)
+		}
+		rows = append(rows, fmt.Sprintf("  %-17s %-14s %s %s %s",
+			p.Time.Local().Format("Jan 2 15:04"),
+			p.Display,
+			padRight(histDeltaStyle(dprev).Render(dprev), 9),
+			histVerdictStyle(p.Verdict).Render(padRight(p.Verdict, 8)),
+			stySub.Render(p.Depth)))
+	}
+	return rows
+}
+
+func (m Model) metricChart(pts []history.Point, lowerBetter bool) []string {
+	if len(pts) < 2 {
+		return []string{stySub.Render("  (need at least two runs to draw a chart)")}
+	}
+	w := m.width() - 4
+	if w > 120 {
+		w = 120
+	}
+	h := m.bodyHeight() - 15
+	if h < 6 {
+		h = 6
+	}
+	if h > 13 {
+		h = 13
+	}
+
+	// Y range padded around the data so the line uses the whole height instead
+	// of being pinned near a zero baseline.
+	lo, hi := pts[0].Value, pts[0].Value
+	for _, p := range pts {
+		lo = min64(lo, p.Value)
+		hi = max64(hi, p.Value)
+	}
+	pad := (hi - lo) * 0.12
+	if pad == 0 {
+		pad = hi*0.05 + 1
+	}
+	lo, hi = lo-pad, hi+pad
+
+	tc := timeserieslinechart.New(w, h,
+		timeserieslinechart.WithYLabelFormatter(func(_ int, v float64) string { return compactNum(v) }),
+	)
+	tc.SetStyle(lipgloss.NewStyle().Foreground(colAccent))
+	tc.AxisStyle = lipgloss.NewStyle().Foreground(colDim)
+	tc.LabelStyle = lipgloss.NewStyle().Foreground(colDim)
+	for _, p := range pts {
+		tc.Push(timeserieslinechart.TimePoint{Time: p.Time, Value: p.Value})
+	}
+	tc.SetYRange(lo, hi)
+	tc.SetViewYRange(lo, hi)
+	tc.DrawBraille()
+	return strings.Split(tc.View(), "\n")
+}
+
+func compactNum(v float64) string {
+	a := v
+	if a < 0 {
+		a = -a
+	}
+	switch {
+	case a >= 1e9:
+		return fmt.Sprintf("%.1fG", v/1e9)
+	case a >= 1e6:
+		return fmt.Sprintf("%.1fM", v/1e6)
+	case a >= 1e4:
+		return fmt.Sprintf("%.0fk", v/1e3)
+	case a >= 100:
+		return fmt.Sprintf("%.0f", v)
+	case a >= 1:
+		return fmt.Sprintf("%.1f", v)
+	default:
+		return fmt.Sprintf("%.2f", v)
+	}
+}
+
+func histDeltaStyle(s string) lipgloss.Style {
+	switch {
+	case strings.HasPrefix(s, "+"):
+		return lipgloss.NewStyle().Foreground(colGood)
+	case strings.HasPrefix(s, "-"):
+		return lipgloss.NewStyle().Foreground(colPoor)
+	}
+	return lipgloss.NewStyle().Foreground(colDim)
+}
+
+func yesno(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
+
 // ---- small helpers ---------------------------------------------
 
 func has(name string) bool { return bench.HasTool(name) }
@@ -538,6 +843,18 @@ func indent(s, pad string) string {
 	return strings.Join(lines, "\n")
 }
 func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+func min64(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+func max64(a, b float64) float64 {
 	if a > b {
 		return a
 	}

@@ -22,8 +22,11 @@ const (
 	scrPreflight
 	scrRunning
 	scrResults
+	scrHistArea
 	scrHistory
 	scrHistoryView
+	scrHistOverview
+	scrHistMetric
 )
 
 type menuItem struct {
@@ -86,10 +89,14 @@ type Model struct {
 	scroll  int
 
 	// history
-	session string
-	hist    []history.Record
-	hcur    int // selected session on the history screen
-	hview   *history.Session
+	session   string
+	hist      []history.Record
+	hcur      int // cursor on the history-area chooser / session list
+	hview     *history.Session
+	harea     string // selected test area
+	haCur     int    // selected metric row in the area overview
+	hmName    string // selected metric for the chart screen
+	hAllHosts bool
 }
 
 type runResult struct {
@@ -167,10 +174,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRunning(msg)
 		case scrResults:
 			return m.updateResults(msg)
+		case scrHistArea:
+			return m.updateHistArea(msg)
 		case scrHistory:
 			return m.updateHistory(msg)
 		case scrHistoryView:
 			return m.updateHistoryView(msg)
+		case scrHistOverview:
+			return m.updateHistOverview(msg)
+		case scrHistMetric:
+			return m.updateHistMetric(msg)
 		}
 
 	case spinner.TickMsg:
@@ -213,7 +226,7 @@ func (m Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if it.hist {
 			m.hist, _ = history.Load()
 			m.hcur = 0
-			m.scr = scrHistory
+			m.scr = scrHistArea
 			return m, nil
 		}
 		m.isAll = it.all
@@ -234,8 +247,9 @@ func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
-	case "esc":
-		m.scr = scrMenu
+	case "esc", "left":
+		m.scr = scrHistArea
+		m.hcur = 0
 	case "up", "k":
 		if m.hcur > 0 {
 			m.hcur--
@@ -251,6 +265,99 @@ func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.scroll = 0
 			m.scr = scrHistoryView
 		}
+	}
+	return m, nil
+}
+
+func (m Model) hostFilter() string {
+	if m.hAllHosts {
+		return ""
+	}
+	return m.info.Hostname
+}
+
+// areaChoices is the list shown on scrHistArea: "Recent runs" + areas with data.
+func (m Model) areaChoices() []string {
+	return append([]string{"Recent runs"}, history.Areas(m.hist)...)
+}
+
+func (m Model) updateHistArea(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	choices := m.areaChoices()
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.scr = scrMenu
+	case "up", "k":
+		if m.hcur > 0 {
+			m.hcur--
+		}
+	case "down", "j":
+		if m.hcur < len(choices)-1 {
+			m.hcur++
+		}
+	case "enter", "right", "l":
+		if m.hcur == 0 {
+			m.scr = scrHistory
+			return m, nil
+		}
+		m.harea = choices[m.hcur]
+		m.haCur = 0
+		m.scr = scrHistOverview
+	}
+	return m, nil
+}
+
+func (m Model) updateHistOverview(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	metrics := history.MetricNames(m.hist, m.harea, m.hostFilter())
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc", "left":
+		m.scr = scrHistArea
+	case "up", "k":
+		if m.haCur > 0 {
+			m.haCur--
+		}
+	case "down", "j":
+		if m.haCur < len(metrics)-1 {
+			m.haCur++
+		}
+	case "h":
+		m.hAllHosts = !m.hAllHosts
+		m.haCur = 0
+	case "enter", "right", "l":
+		if m.haCur < len(metrics) {
+			m.hmName = metrics[m.haCur].Name
+			m.scroll = 0
+			m.scr = scrHistMetric
+		}
+	}
+	return m, nil
+}
+
+func (m Model) updateHistMetric(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "esc", "left":
+		m.scr = scrHistOverview
+	case "h":
+		m.hAllHosts = !m.hAllHosts
+	case "up", "k":
+		m.scroll--
+	case "down", "j":
+		m.scroll++
+	case "pgup", "b":
+		m.scroll -= m.bodyHeight() - 2
+	case "pgdown", " ", "f":
+		m.scroll += m.bodyHeight() - 2
+	}
+	if maxS := len(m.histMetricLines()) - m.bodyHeight(); m.scroll > maxS {
+		m.scroll = maxS
+	}
+	if m.scroll < 0 {
+		m.scroll = 0
 	}
 	return m, nil
 }

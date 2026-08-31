@@ -56,11 +56,15 @@ screen shows, per metric, how much faster or slower it is than your previous run
 of the same test on the same host. Browse past runs with:
 
 ```sh
-ptop history            # list runs, newest first
-ptop history 2          # show run #2, compared against the run before it
+ptop history                     # list runs, newest first
+ptop history 2                   # show run #2, compared against the run before it
+ptop history cpu                 # every CPU metric over time (sparklines + trend)
+ptop history cpu "spawn rate"    # one metric's full history, run by run
+ptop history cpu all             # include other hosts too
 ```
 
-The **History** entry in the TUI menu does the same interactively.
+The **History** entry in the TUI menu does the same interactively, and adds a
+per-metric line chart (ntcharts).
 
 ### Network throughput without iperf3
 
@@ -100,7 +104,7 @@ For the best numbers on a server: `dnf install fio sysbench iperf3` (or
 
 ```
 main.go            - argument handling; starts the TUI, the CLI, or `ptop serve`
-cli.go             - "ptop run ..." and "ptop history" (non-interactive)
+cli.go             - "ptop run ...", "ptop history [area]" (non-interactive)
 internal/bench/    - the test engine: one runner per test, streams Events to the UI
   lan.go           - network checks that need nothing on the other end
   serve.go         - `ptop serve` and its throughput client

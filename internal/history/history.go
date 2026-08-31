@@ -32,7 +32,7 @@ type Record struct {
 	Metrics []Metric  `json:"metrics"`
 }
 
-// Metric is the stored form of bench.Metric - just what comparison needs.
+// Metric is the stored form of bench.Metric.
 type Metric struct {
 	Name        string  `json:"name"`
 	Display     string  `json:"display"`
@@ -40,6 +40,7 @@ type Metric struct {
 	Unit        string  `json:"unit,omitempty"`
 	LowerBetter bool    `json:"lower_better,omitempty"`
 	Verdict     string  `json:"verdict,omitempty"`
+	Note        string  `json:"note,omitempty"`
 }
 
 // Path is the JSONL file. Override with PTOP_HISTORY.
@@ -75,7 +76,7 @@ func Save(session, host, depth string, r bench.Result, runErr error) error {
 	for _, m := range r.Metrics {
 		rec.Metrics = append(rec.Metrics, Metric{
 			Name: m.Name, Display: m.Display, Value: m.Value, Unit: m.Unit,
-			LowerBetter: m.LowerBetter, Verdict: m.Verdict.Label(),
+			LowerBetter: m.LowerBetter, Verdict: m.Verdict.Label(), Note: m.Note,
 		})
 	}
 	p := Path()

@@ -37,6 +37,37 @@ func TestCompareDirection(t *testing.T) {
 	}
 }
 
+func TestSeriesAndSummarize(t *testing.T) {
+	base := time.Now().Add(-72 * time.Hour)
+	mk := func(v float64) Record {
+		return Record{Time: base, Kind: "CPU", Host: "h", Depth: "normal",
+			Metrics: []Metric{{Name: "AES (x)", Value: v, Unit: "MB/s"}}}
+	}
+	recs := []Record{}
+	for i, v := range []float64{100, 110, 90, 120} {
+		r := mk(v)
+		r.Time = base.Add(time.Duration(i) * time.Hour)
+		recs = append(recs, r)
+	}
+	pts := Series(recs, "CPU", "AES (something else)", "h") // Key() ignores parens
+	if len(pts) != 4 || pts[0].Value != 100 || pts[3].Value != 120 {
+		t.Fatalf("series: %+v", pts)
+	}
+	st := Summarize(pts, false)
+	if st.Max.Value != 120 || st.Min.Value != 90 {
+		t.Fatalf("minmax: %+v", st)
+	}
+	if st.OverWindowPct < 19 || st.OverWindowPct > 21 { // 100 -> 120
+		t.Fatalf("window pct: %v", st.OverWindowPct)
+	}
+	if sp := Sparkline(pts, 10); len([]rune(sp)) != 4 {
+		t.Fatalf("sparkline %q", sp)
+	}
+	if AreaFromArg("net") != "Network" || AreaFromArg("bogus") != "" {
+		t.Fatal("AreaFromArg")
+	}
+}
+
 func TestSaveLoadRoundTrip(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "h.jsonl")
 	t.Setenv("PTOP_HISTORY", p)

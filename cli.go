@@ -165,8 +165,14 @@ func runHistory(args []string) int {
 				s.Time.Local().Format("2006-01-02 15:04:05"),
 				cut(s.Host, 16), s.Depth, strings.Join(s.Kinds(), ", "))
 		}
-		fmt.Println("\nptop history <#>   show a run (compared against the run before it)")
+		fmt.Println("\nptop history <#>            show a run (vs the run before it)")
+		fmt.Println("ptop history <area>        a test area's metrics over time  (cpu|disk|mem|net|gpu)")
+		fmt.Println("ptop history <area> <name> one metric's full history")
 		return 0
+	}
+
+	if area := history.AreaFromArg(args[0]); area != "" {
+		return runHistoryArea(recs, area, args[1:])
 	}
 
 	var sel *history.Session
@@ -225,4 +231,108 @@ func cut(s string, n int) string {
 		return s
 	}
 	return s[:n-1] + "…"
+}
+
+func runHistoryArea(recs []history.Record, area string, rest []string) int {
+	host, _ := os.Hostname()
+	// drop an "all" / "--all-hosts" trailing token
+	if len(rest) > 0 && (rest[len(rest)-1] == "all" || rest[len(rest)-1] == "--all-hosts") {
+		host = ""
+		rest = rest[:len(rest)-1]
+	}
+	metrics := history.MetricNames(recs, area, host)
+	if len(metrics) == 0 && host != "" {
+		if all := history.MetricNames(recs, area, ""); len(all) > 0 {
+			fmt.Printf("(no %s history for this host - showing all hosts)\n\n", area)
+			host, metrics = "", all
+		}
+	}
+	if len(metrics) == 0 {
+		fmt.Printf("No %s history recorded.\n", area)
+		return 0
+	}
+
+	// one metric requested
+	if len(rest) > 0 {
+		q := strings.ToLower(strings.Join(rest, " "))
+		var sel *history.MetricInfo
+		for i := range metrics {
+			if strings.Contains(strings.ToLower(metrics[i].Name), q) {
+				sel = &metrics[i]
+				break
+			}
+		}
+		if sel == nil {
+			fmt.Fprintf(os.Stderr, "no %s metric matching %q\n", area, q)
+			return 2
+		}
+		pts := history.Series(recs, area, sel.Name, host)
+		st := history.Summarize(pts, sel.LowerBetter)
+		fmt.Printf("%s · %s   (%s, %s)\n", area, sel.Name, orDash(sel.Unit), hostLabel(host))
+		fmt.Printf("  %s   %s\n\n", history.Sparkline(pts, 60), trendText(st))
+		fmt.Printf("  %-17s %-14s %-9s %-8s %s\n", "run", "value", "Δ prev", "verdict", "depth")
+		for i := len(pts) - 1; i >= 0; i-- {
+			p := pts[i]
+			d := ""
+			if i > 0 && pts[i-1].Value != 0 {
+				pc := (p.Value - pts[i-1].Value) / pts[i-1].Value * 100
+				if sel.LowerBetter {
+					pc = -pc
+				}
+				d = fmt.Sprintf("%+.1f%%", pc)
+			}
+			fmt.Printf("  %-17s %-14s %-9s %-8s %s\n",
+				p.Time.Local().Format("Jan 2 15:04"), p.Display, d, p.Verdict, p.Depth)
+		}
+		return 0
+	}
+
+	// area overview
+	span := ""
+	if s := history.Series(recs, area, metrics[0].Name, host); len(s) > 0 {
+		span = s[0].Time.Local().Format("Jan 2") + " → " + s[len(s)-1].Time.Local().Format("Jan 2")
+	}
+	fmt.Printf("%s history · %s · %s\n\n", area, hostLabel(host), span)
+	fmt.Printf("  %-28s %-14s %-22s %s\n", "metric", "latest", "trend", "")
+	for _, mi := range metrics {
+		pts := history.Series(recs, area, mi.Name, host)
+		st := history.Summarize(pts, mi.LowerBetter)
+		latest := ""
+		if st.N > 0 {
+			latest = st.Last.Display
+		}
+		fmt.Printf("  %-28s %-14s %-22s %s\n",
+			cut(mi.Name, 28), latest, history.Sparkline(pts, 20), trendText(st))
+	}
+	fmt.Printf("\nptop history %s \"<metric>\"   full history of one metric\n", strings.ToLower(area))
+	return 0
+}
+
+func trendText(st history.Stats) string {
+	if !st.HasWindow {
+		return "first run"
+	}
+	p := st.OverWindowPct
+	if p > -1 && p < 1 {
+		return fmt.Sprintf("flat over %d runs", st.N)
+	}
+	s := fmt.Sprintf("%+.0f%% over %d runs", p, st.N)
+	if p <= -10 {
+		s += "  (!)"
+	}
+	return s
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}
+
+func hostLabel(h string) string {
+	if h == "" {
+		return "all hosts"
+	}
+	return "host " + h
 }
