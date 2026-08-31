@@ -92,3 +92,45 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 	_ = os.Remove(p)
 }
+
+func TestDeleteSession(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "h.jsonl")
+	t.Setenv("PTOP_HISTORY", p)
+
+	sess1 := NewSession()
+	sess2 := NewSession()
+	r1 := bench.Result{Kind: bench.CPU, Tool: "test", Metrics: []bench.Metric{{Name: "M1", Value: 10}}}
+	r2 := bench.Result{Kind: bench.Disk, Tool: "test", Metrics: []bench.Metric{{Name: "M2", Value: 20}}}
+
+	if err := Save(sess1, "host1", "quick", r1, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(sess2, "host1", "quick", r2, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	recs, err := Load()
+	if err != nil || len(recs) != 2 {
+		t.Fatalf("expected 2 records before delete, got %d (err: %v)", len(recs), err)
+	}
+
+	if err := DeleteSession(sess1); err != nil {
+		t.Fatalf("DeleteSession failed: %v", err)
+	}
+
+	recs, err = Load()
+	if err != nil {
+		t.Fatalf("Load after delete failed: %v", err)
+	}
+	if len(recs) != 1 {
+		t.Fatalf("expected 1 record after delete, got %d", len(recs))
+	}
+	if recs[0].Session != sess2 {
+		t.Fatalf("expected sess2 to remain, got session %s", recs[0].Session)
+	}
+
+	// Deleting a nonexistent session should be a no-op and succeed
+	if err := DeleteSession("nonexistent"); err != nil {
+		t.Fatalf("DeleteSession nonexistent error: %v", err)
+	}
+}

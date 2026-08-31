@@ -122,6 +122,57 @@ func Load() ([]Record, error) {
 	return out, sc.Err()
 }
 
+// DeleteSession removes all records for the given session ID from the history file.
+func DeleteSession(sessionID string) error {
+	recs, err := Load()
+	if err != nil {
+		return err
+	}
+	p := Path()
+	var kept []Record
+	for _, r := range recs {
+		if r.Session != sessionID {
+			kept = append(kept, r)
+		}
+	}
+	if len(kept) == len(recs) {
+		return nil
+	}
+
+	dir := filepath.Dir(p)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	tmpFile, err := os.CreateTemp(dir, "history-*.jsonl.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmpFile.Name()
+	defer func() {
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpName)
+	}()
+
+	for _, r := range kept {
+		b, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		if _, err := tmpFile.Write(append(b, '\n')); err != nil {
+			return err
+		}
+	}
+	if err := tmpFile.Sync(); err != nil {
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpName, p)
+}
+
 // Session groups the records written together by one invocation.
 type Session struct {
 	ID      string
