@@ -87,6 +87,8 @@ ptop
 | <kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>k</kbd> / <kbd>j</kbd> | Move cursor / select menu item / navigate fields / scroll |
 | <kbd>←</kbd> / <kbd>→</kbd> or <kbd>h</kbd> / <kbd>l</kbd> | Adjust settings (depth, target) / switch result tabs / toggle host filter |
 | <kbd>Enter</kbd> | Open selection / start test / focus text input / view metric chart |
+| <kbd>t</kbd> | Edit tag / label for highlighted benchmark run |
+| <kbd>Space</kbd> / <kbd>c</kbd> | Set / toggle diff baseline run, or open diff comparison view |
 | <kbd>d</kbd> | **Delete** highlighted benchmark run (in History list or detail view) |
 | <kbd>y</kbd> / <kbd>n</kbd> | Confirm (<kbd>y</kbd>) or cancel (<kbd>n</kbd>/<kbd>Esc</kbd>) run deletion |
 | <kbd>PgUp</kbd> / <kbd>PgDn</kbd> | Fast scroll results and history tables |
@@ -121,6 +123,7 @@ ptop serve :9000
   - `quick`: ~10s per sub-test (rapid check)
   - `normal`: ~30s per sub-test (default)
   - `deep`: ~60s per sub-test (stress check & thermal throttling)
+- `--tag <text>`: Tag or label for this benchmark run (stored in history).
 - `--path <dir>`: Target directory for disk I/O benchmarks (default: current directory).
 - `--host <ip|host>`: Peer server running `ptop serve`, `iperf3 -s`, or accessible via SSH.
 - `--url <url>`: Custom download URL for network throughput measurement.
@@ -138,6 +141,12 @@ ptop history
 
 # Inspect a specific run with deltas vs previous run
 ptop history 1
+
+# Compare two runs side-by-side
+ptop history diff 1 2
+
+# Set or update a tag/label for a run
+ptop history tag 1 "baseline after kernel upgrade"
 
 # View metric trends and sparklines for a test area
 ptop history cpu
@@ -159,7 +168,7 @@ ptop history rm 20260831T192659
 
 | Suite | Preferred Tool | Fallback Tool | Measured Metrics |
 | :--- | :--- | :--- | :--- |
-| **Disk** | `fio` | `dd` (`O_DIRECT`) | Sequential read/write throughput, 4 KiB random IOPS, p99 read latency, fsync/commit latency. |
+| **Disk** | `fio` | `dd` (`O_DIRECT`) | Sequential read/write throughput, 4 KiB random IOPS, p99 read latency, commit latency (fsync), small file creation/stat/deletion rate, database transactions (SQLite ACID ops/s). |
 | **CPU** | `sysbench` | Built-in prime test | Single-core & multi-core ops/s, SMT core scaling, AES-256-GCM encryption throughput, Deflate compression rate, process fork+exec rate, hypervisor steal time, context switch latency, thermal throttling. |
 | **Memory** | `sysbench` | Built-in memory copy | Write bandwidth, random-access latency (pointer chasing), free RAM, NUMA node topology. |
 | **Network** | `ptop serve` / `iperf3` / SSH | Public HTTP CDN | Latency, jitter, packet loss, DNS resolution, TCP+TLS handshake; LAN gateway latency, link speed/duplex, NIC errors, flood-ping throughput estimate (root); download/upload throughput. |

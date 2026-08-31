@@ -7,6 +7,7 @@ ptop \- guided performance measurement and benchmarking for Linux servers
 .B ptop run
 .I test
 [\fB\-\-depth\fR \fIquick\fR|\fInormal\fR|\fIdeep\fR]
+[\fB\-\-tag\fR \fITEXT\fR]
 [\fB\-\-path\fR \fIDIR\fR]
 [\fB\-\-host\fR \fIHOST\fR]
 [\fB\-\-url\fR \fIURL\fR]
@@ -16,7 +17,7 @@ ptop \- guided performance measurement and benchmarking for Linux servers
 [\fIADDR\fR]
 .br
 .B ptop history
-[\fI#\fR | \fIarea\fR [\fImetric\fR] [\fIall\fR] | \fIrm\fR \fI#\fR|\fIsession-id\fR]
+[\fI#\fR | \fIdiff\fR \fI#1\fR \fI#2\fR | \fItag\fR \fI#\fR [\fItext\fR] | \fIarea\fR [\fImetric\fR] [\fIall\fR] | \fIrm\fR \fI#\fR|\fIsession-id\fR]
 .br
 .B ptop \-\-help
 .br
@@ -48,7 +49,7 @@ Display version information.
 The \fItest\fR argument for \fBptop run\fR can be one of:
 .TP
 .B disk
-Measures sequential read/write throughput, 4 KiB random IOPS, 99th percentile read latency, and fsync/commit latency. Prefers \fBfio\fR when installed, falling back to direct I/O with \fBdd\fR.
+Measures sequential read/write throughput, 4 KiB random IOPS, 99th percentile read latency, commit latency (fsync), small file creation/stat/deletion rate, and database transactions (SQLite ACID ops/s). Prefers \fBfio\fR when installed, falling back to direct I/O with \fBdd\fR and built-in metadata and SQLite benchmarks.
 .TP
 .B cpu
 Measures single-core and multi-core compute throughput, SMT core scaling efficiency, AES-256-GCM encryption throughput, compression rate, fork/exec process creation rate, hypervisor steal time, context switch latency, and thermal throttling (on deep runs). Prefers \fBsysbench\fR when installed, falling back to built-in prime computations.
@@ -76,6 +77,9 @@ Adjusts test thoroughness and duration:
 .IP \(bu 2
 \fBdeep\fR: ~60 seconds per test, providing maximum measurement stability and stress checks (e.g. CPU thermal throttling).
 .RE
+.TP
+\fB\-\-tag\fR \fITEXT\fR
+Specifies a descriptive tag or label for the benchmark run (persisted in history).
 .TP
 \fB\-\-path\fR \fIDIR\fR
 Specifies the target directory for disk benchmark read/write files (default: current working directory). Test files are automatically deleted upon completion.
@@ -106,7 +110,11 @@ Use \fBLeft\fR/\fBRight\fR to switch tabs between tests when running multiple be
 .B History Screens
 .RS
 .IP \(bu 2
-\fBRecent runs\fR: Lists previous benchmark sessions with timestamps, hostnames, and test suites.
+\fBRecent runs\fR: Lists previous benchmark sessions with timestamps, hostnames, tags, and test suites.
+.IP \(bu 2
+\fBTag run (\fIt\fB)\fR: Pressing \fBt\fR on a selected run opens an inline editor to add, update, or clear the run's label.
+.IP \(bu 2
+\fBDiff comparison (\fISpace\fB/\fIc\fB)\fR: Pressing \fBSpace\fR marks a run as the diff baseline. Pressing \fBc\fR or \fBSpace\fR on another run opens the side-by-side diff comparison view.
 .IP \(bu 2
 \fBDelete run (\fId\fB)\fR: Pressing \fBd\fR on a selected run prompts for deletion with an inline confirmation (\fBy\fR to confirm, \fBn\fR/\fBEsc\fR to cancel).
 .IP \(bu 2
@@ -120,10 +128,16 @@ Every successful test run is persisted as a JSON record in the local history log
 CLI history subcommands:
 .TP
 .B ptop history
-List all recorded benchmark sessions with ID, timestamp, host, test depth, and executed tests.
+List all recorded benchmark sessions with ID, timestamp, host, test depth, tag, and executed tests.
 .TP
 .B ptop history \fI#\fR
 Display full results for run number \fI#\fR, including metric deltas compared to the run preceding it.
+.TP
+.B ptop history diff \fI#1\fR \fI#2\fR
+Display a side-by-side metric comparison between run \fI#1\fR and run \fI#2\fR with percentage deltas.
+.TP
+.B ptop history tag \fI#\fR [\fItext\fR]
+Set, update, or clear (if text is omitted) the tag/label for run number \fI#\fR or session ID.
 .TP
 .B ptop history \fIarea\fR [\fIall\fR]
 Display all metrics for a test category (\fIdisk\fR, \fIcpu\fR, \fImem\fR, \fInet\fR, \fIgpu\fR) with sparkline trends. Append \fIall\fR to include results from all hosts.
@@ -189,6 +203,8 @@ Browse and manage benchmark history:
 .RS
 .nf
 $ ptop history
+$ ptop history diff 1 2
+$ ptop history tag 1 "baseline after upgrade"
 $ ptop history cpu
 $ ptop history disk "random read"
 $ ptop history rm 3
