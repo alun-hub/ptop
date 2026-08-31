@@ -146,6 +146,11 @@ func diskFio(ctx context.Context, cfg Config, dir string, out chan<- Event) (Res
 	if metaErr != nil {
 		out <- LogLine{Text: "metadata test skipped: " + metaErr.Error()}
 	}
+
+	sqlMetric, sqlErr := diskSQLite(ctx, cfg, dir, out)
+	if sqlErr != nil {
+		out <- LogLine{Text: "sqlite test skipped: " + sqlErr.Error()}
+	}
 	out <- Progress{Frac: 1, Label: "done"}
 
 	wMBs := jw.Write.BW / 1024
@@ -170,6 +175,9 @@ func diskFio(ctx context.Context, cfg Config, dir string, out chan<- Event) (Res
 	}
 	if metaErr == nil {
 		res.Metrics = append(res.Metrics, metaMetrics...)
+	}
+	if sqlErr == nil {
+		res.Metrics = append(res.Metrics, sqlMetric)
 	}
 	res.Summary = diskSummary(wMBs, rMBs)
 	return res, nil
@@ -230,6 +238,11 @@ func diskDD(ctx context.Context, cfg Config, dir string, out chan<- Event) (Resu
 	if metaErr != nil {
 		out <- LogLine{Text: "metadata test skipped: " + metaErr.Error()}
 	}
+
+	sqlMetric, sqlErr := diskSQLite(ctx, cfg, dir, out)
+	if sqlErr != nil {
+		out <- LogLine{Text: "sqlite test skipped: " + sqlErr.Error()}
+	}
 	out <- Progress{Frac: 1, Label: "done"}
 
 	wMBs := ddThroughput(wout)
@@ -243,6 +256,9 @@ func diskDD(ctx context.Context, cfg Config, dir string, out chan<- Event) (Resu
 	}
 	if metaErr == nil {
 		res.Metrics = append(res.Metrics, metaMetrics...)
+	}
+	if sqlErr == nil {
+		res.Metrics = append(res.Metrics, sqlMetric)
 	}
 	res.Summary = diskSummary(wMBs, rMBs) + " Install fio for random I/O (IOPS) and more stable numbers."
 	return res, nil
