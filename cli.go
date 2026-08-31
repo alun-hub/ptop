@@ -24,6 +24,7 @@ func runCLI(args []string) int {
 
 	cfg := bench.Config{Depth: bench.Normal, IsRoot: os.Geteuid() == 0}
 	cfg.Path, _ = os.Getwd()
+	var tag string
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
 		case "--depth":
@@ -39,6 +40,9 @@ func runCLI(args []string) int {
 				fmt.Fprintln(os.Stderr, "invalid --depth")
 				return 2
 			}
+		case "--tag":
+			i++
+			tag = get(args, i)
 		case "--path":
 			i++
 			cfg.Path = get(args, i)
@@ -66,14 +70,14 @@ func runCLI(args []string) int {
 	for _, k := range kinds {
 		c := cfg
 		c.Kind = k
-		if !runOne(c, session, host, depth, hist) {
+		if !runOne(c, session, host, depth, tag, hist) {
 			rc = 1
 		}
 	}
 	return rc
 }
 
-func runOne(c bench.Config, session, host, depth string, hist []history.Record) bool {
+func runOne(c bench.Config, session, host, depth, tag string, hist []history.Record) bool {
 	fmt.Printf("\n== %s ==\n", c.Kind)
 	ch := make(chan bench.Event, 128)
 	go bench.Run(context.Background(), c, ch)
@@ -89,7 +93,7 @@ func runOne(c bench.Config, session, host, depth string, hist []history.Record) 
 			}
 			base := history.Baseline(hist, c.Kind.String(), host, session)
 			printResult(e.Result, base)
-			if err := history.Save(session, host, depth, "", e.Result, e.Err); err != nil {
+			if err := history.Save(session, host, depth, tag, e.Result, e.Err); err != nil {
 				fmt.Fprintf(os.Stderr, "  (could not save to history: %v)\n", err)
 			}
 		}
@@ -145,6 +149,28 @@ func get(a []string, i int) string {
 	return ""
 }
 
+func findSession(arg string, sessions []history.Session) (*history.Session, int) {
+	if n, err := strconv.Atoi(arg); err == nil && n >= 1 && n <= len(sessions) {
+		return &sessions[n-1], n - 1
+	}
+	if arg != "" {
+		for i := range sessions {
+			if strings.HasPrefix(sessions[i].ID, arg) {
+				return &sessions[i], i
+			}
+		}
+	}
+	return nil, -1
+}
+
+func formatRunInfo(s *history.Session) string {
+	t := s.Time.Local().Format("2006-01-02 15:04:05")
+	if s.Tag != "" {
+		return fmt.Sprintf("%s, %s", t, s.Tag)
+	}
+	return t
+}
+
 func runHistory(args []string) int {
 	recs, err := history.Load()
 	if err != nil {
@@ -159,13 +185,31 @@ func runHistory(args []string) int {
 	}
 
 	if len(args) == 0 {
-		fmt.Printf("%-3s  %-19s  %-16s  %-8s  %s\n", "#", "when", "host", "depth", "tests")
-		for i, s := range sessions {
-			fmt.Printf("%-3d  %-19s  %-16s  %-8s  %s\n", i+1,
-				s.Time.Local().Format("2006-01-02 15:04:05"),
-				cut(s.Host, 16), s.Depth, strings.Join(s.Kinds(), ", "))
+		hasTags := false
+		for _, s := range sessions {
+			if s.Tag != "" {
+				hasTags = true
+				break
+			}
+		}
+		if hasTags {
+			fmt.Printf("%-3s  %-19s  %-14s  %-7s  %-16s  %s\n", "#", "when", "host", "depth", "tag", "tests")
+			for i, s := range sessions {
+				fmt.Printf("%-3d  %-19s  %-14s  %-7s  %-16s  %s\n", i+1,
+					s.Time.Local().Format("2006-01-02 15:04:05"),
+					cut(s.Host, 14), s.Depth, cut(s.Tag, 16), strings.Join(s.Kinds(), ", "))
+			}
+		} else {
+			fmt.Printf("%-3s  %-19s  %-16s  %-8s  %s\n", "#", "when", "host", "depth", "tests")
+			for i, s := range sessions {
+				fmt.Printf("%-3d  %-19s  %-16s  %-8s  %s\n", i+1,
+					s.Time.Local().Format("2006-01-02 15:04:05"),
+					cut(s.Host, 16), s.Depth, strings.Join(s.Kinds(), ", "))
+			}
 		}
 		fmt.Println("\nptop history <#>            show a run (vs the run before it)")
+		fmt.Println("ptop history diff <#1> <#2> compare two runs side-by-side")
+		fmt.Println("ptop history tag <#> \"<text>\" set or update a tag for a run")
 		fmt.Println("ptop history <area>        a test area's metrics over time  (cpu|disk|mem|net|gpu)")
 		fmt.Println("ptop history <area> <name> one metric's full history")
 		fmt.Println("ptop history rm <#>        delete a run from history")
@@ -177,17 +221,7 @@ func runHistory(args []string) int {
 			fmt.Fprintln(os.Stderr, "usage: ptop history rm <#|session-id>")
 			return 2
 		}
-		var sel *history.Session
-		if n, e := strconv.Atoi(args[1]); e == nil && n >= 1 && n <= len(sessions) {
-			sel = &sessions[n-1]
-		} else if args[1] != "" {
-			for i := range sessions {
-				if strings.HasPrefix(sessions[i].ID, args[1]) {
-					sel = &sessions[i]
-					break
-				}
-			}
-		}
+		sel, _ := findSession(args[1], sessions)
 		if sel == nil {
 			fmt.Fprintf(os.Stderr, "no such run: %s\n", args[1])
 			return 2
@@ -200,21 +234,75 @@ func runHistory(args []string) int {
 		return 0
 	}
 
+	if args[0] == "tag" {
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: ptop history tag <#|session-id> [tag-text]")
+			return 2
+		}
+		sel, _ := findSession(args[1], sessions)
+		if sel == nil {
+			fmt.Fprintf(os.Stderr, "no such run: %s\n", args[1])
+			return 2
+		}
+		newTag := ""
+		if len(args) > 2 {
+			newTag = strings.Join(args[2:], " ")
+		}
+		if err := history.SetTag(sel.ID, newTag); err != nil {
+			fmt.Fprintf(os.Stderr, "could not update tag: %v\n", err)
+			return 1
+		}
+		fmt.Printf("Updated tag for run %s (%s, %s): %q\n", sel.ID, sel.Time.Local().Format("2006-01-02 15:04:05"), sel.Host, newTag)
+		return 0
+	}
+
+	if args[0] == "diff" {
+		if len(args) < 3 {
+			fmt.Fprintln(os.Stderr, "usage: ptop history diff <#1|id1> <#2|id2>")
+			return 2
+		}
+		selA, idxA := findSession(args[1], sessions)
+		if selA == nil {
+			fmt.Fprintf(os.Stderr, "no such run: %s\n", args[1])
+			return 2
+		}
+		selB, idxB := findSession(args[2], sessions)
+		if selB == nil {
+			fmt.Fprintf(os.Stderr, "no such run: %s\n", args[2])
+			return 2
+		}
+		diff := history.DiffSessions(*selA, *selB)
+		fmt.Printf("Diff: Run #%d (%s) vs Run #%d (%s)\n\n",
+			idxA+1, formatRunInfo(selA),
+			idxB+1, formatRunInfo(selB))
+
+		fmt.Printf("%-10s  %-30s  %-14s  %-14s  %s\n",
+			"Area", "Metric", fmt.Sprintf("Run #%d", idxA+1), fmt.Sprintf("Run #%d", idxB+1), "Change")
+		for _, item := range diff.Items {
+			change := "-"
+			if item.Delta.Valid {
+				change = fmt.Sprintf("%+.1f%%", item.Delta.Pct)
+				if item.Verdict != "" {
+					change += " [" + item.Verdict + "]"
+				}
+			} else if item.Verdict != "" {
+				change = "[" + item.Verdict + "]"
+			}
+			fmt.Printf("%-10s  %-30s  %-14s  %-14s  %s\n",
+				cut(item.Kind, 10),
+				cut(item.Name, 30),
+				cut(orDash(item.BaseDisplay), 14),
+				cut(orDash(item.TargDisplay), 14),
+				change)
+		}
+		return 0
+	}
+
 	if area := history.AreaFromArg(args[0]); area != "" {
 		return runHistoryArea(recs, area, args[1:])
 	}
 
-	var sel *history.Session
-	if n, e := strconv.Atoi(args[0]); e == nil && n >= 1 && n <= len(sessions) {
-		sel = &sessions[n-1]
-	} else {
-		for i := range sessions {
-			if strings.HasPrefix(sessions[i].ID, args[0]) {
-				sel = &sessions[i]
-				break
-			}
-		}
-	}
+	sel, _ := findSession(args[0], sessions)
 	if sel == nil {
 		fmt.Fprintf(os.Stderr, "no such run: %s\n", args[0])
 		return 2

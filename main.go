@@ -88,6 +88,8 @@ Usage:
   ptop run <test> [flags]       run one test directly and print the result
   ptop serve [addr]             run the throughput server for the network test
   ptop history [#]              list past runs, or show one (with % vs the run before)
+  ptop history diff <#1> <#2>   compare two runs side-by-side
+  ptop history tag <#> [text]   add, update, or clear a tag for a run
 
 Tests:
   disk   read/write and random I/O
@@ -99,11 +101,12 @@ Tests:
 
 Flags:
   --depth quick|normal|deep   how long the test runs (default: normal)
-  --path DIR                   directory for the disk test (default: current directory)
-  --host HOST                  peer for the network test - runs 'ptop serve',
-                               'iperf3 -s', or is reachable over ssh
-  --url URL                    download this URL for the throughput test
-  --port N                     port of 'ptop serve' on --host (default 5330)
+  --tag "<text>"              tag or label for this run (stored in history)
+  --path DIR                  directory for the disk test (default: current directory)
+  --host HOST                 peer for the network test - runs 'ptop serve',
+                              'iperf3 -s', or is reachable over ssh
+  --url URL                   download this URL for the throughput test
+  --port N                    port of 'ptop serve' on --host (default 5330)
 
 ptop serve [addr] listens on ` + fmt.Sprint(bench.ServePort) + ` by default; pass ":9000" or "0.0.0.0:9000" to change.
 `
