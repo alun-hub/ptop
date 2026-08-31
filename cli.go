@@ -168,6 +168,35 @@ func runHistory(args []string) int {
 		fmt.Println("\nptop history <#>            show a run (vs the run before it)")
 		fmt.Println("ptop history <area>        a test area's metrics over time  (cpu|disk|mem|net|gpu)")
 		fmt.Println("ptop history <area> <name> one metric's full history")
+		fmt.Println("ptop history rm <#>             delete a run from history")
+		return 0
+	}
+
+	if args[0] == "rm" || args[0] == "delete" {
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: ptop history rm <#|session-id>")
+			return 2
+		}
+		var sel *history.Session
+		if n, e := strconv.Atoi(args[1]); e == nil && n >= 1 && n <= len(sessions) {
+			sel = &sessions[n-1]
+		} else {
+			for i := range sessions {
+				if strings.HasPrefix(sessions[i].ID, args[1]) {
+					sel = &sessions[i]
+					break
+				}
+			}
+		}
+		if sel == nil {
+			fmt.Fprintf(os.Stderr, "no such run: %s\n", args[1])
+			return 2
+		}
+		if err := history.DeleteSession(sel.ID); err != nil {
+			fmt.Fprintf(os.Stderr, "could not delete run: %v\n", err)
+			return 1
+		}
+		fmt.Printf("Deleted run %s (%s, %s)\n", sel.ID, sel.Time.Local().Format("2006-01-02 15:04:05"), sel.Host)
 		return 0
 	}
 
