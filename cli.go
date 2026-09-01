@@ -65,19 +65,20 @@ func runCLI(args []string) int {
 	host, _ := os.Hostname()
 	depth := cfg.Depth.Token()
 	hist, _ := history.Load()
+	inv := bench.Inventorize()
 
 	rc := 0
 	for _, k := range kinds {
 		c := cfg
 		c.Kind = k
-		if !runOne(c, session, host, depth, tag, hist) {
+		if !runOne(c, session, host, depth, tag, hist, &inv) {
 			rc = 1
 		}
 	}
 	return rc
 }
 
-func runOne(c bench.Config, session, host, depth, tag string, hist []history.Record) bool {
+func runOne(c bench.Config, session, host, depth, tag string, hist []history.Record, inv *bench.Inventory) bool {
 	fmt.Printf("\n== %s ==\n", c.Kind)
 	ch := make(chan bench.Event, 128)
 	go bench.Run(context.Background(), c, ch)
@@ -93,7 +94,7 @@ func runOne(c bench.Config, session, host, depth, tag string, hist []history.Rec
 			}
 			base := history.Baseline(hist, c.Kind.String(), host, session)
 			printResult(e.Result, base)
-			if err := history.Save(session, host, depth, tag, e.Result, e.Err); err != nil {
+			if err := history.Save(session, host, depth, tag, e.Result, e.Err, inv); err != nil {
 				fmt.Fprintf(os.Stderr, "  (could not save to history: %v)\n", err)
 			}
 		}
@@ -316,6 +317,9 @@ func runHistory(args []string) int {
 	}
 	fmt.Printf("Run %s  -  %s  %s  depth %s\n", sel.ID,
 		sel.Time.Local().Format("2006-01-02 15:04:05"), sel.Host, sel.Depth)
+	if mach := sessionMachine(sel); mach != "" {
+		fmt.Printf("  %s\n", mach)
+	}
 	for _, r := range sel.Records {
 		fmt.Printf("\n== %s ==\n", r.Kind)
 		if r.Tool != "" {
@@ -341,6 +345,17 @@ func runHistory(args []string) int {
 		}
 	}
 	return 0
+}
+
+// sessionMachine returns the compact machine line for the first record in the
+// session that recorded one.
+func sessionMachine(s *history.Session) string {
+	for _, r := range s.Records {
+		if r.Machine != nil {
+			return oneLineMachine(r.Machine)
+		}
+	}
+	return ""
 }
 
 func cut(s string, n int) string {

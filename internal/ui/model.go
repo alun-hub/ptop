@@ -164,6 +164,16 @@ func New() Model {
 // invMsg carries the machine inventory collected off the main loop.
 type invMsg bench.Inventory
 
+// machinePtr returns the collected inventory for history, or nil if it has not
+// arrived yet.
+func (m Model) machinePtr() *bench.Inventory {
+	if m.inv.CPUModel == "" && m.inv.OSName == "" {
+		return nil
+	}
+	inv := m.inv
+	return &inv
+}
+
 func (m Model) Init() tea.Cmd {
 	return func() tea.Msg { return invMsg(bench.Inventorize()) }
 }
@@ -766,7 +776,7 @@ func (m Model) handleEvent(ev bench.Event) (tea.Model, tea.Cmd) {
 			m.cancel = nil
 		}
 		m.results = append(m.results, runResult{res: e.Result, err: e.Err})
-		_ = history.Save(m.session, m.info.Hostname, m.cur.Depth.Token(), "", e.Result, e.Err)
+		_ = history.Save(m.session, m.info.Hostname, m.cur.Depth.Token(), "", e.Result, e.Err, m.machinePtr())
 		return m.next()
 	}
 	return m, waitEvent(m.ch)

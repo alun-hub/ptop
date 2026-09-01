@@ -126,6 +126,52 @@ func formatInventory(inv bench.Inventory) string {
 	return b.String()
 }
 
+// oneLineMachine is a compact single-line description of a recorded machine,
+// for history listings. Returns "" when the inventory is absent.
+func oneLineMachine(inv *bench.Inventory) string {
+	if inv == nil {
+		return ""
+	}
+	var parts []string
+	if inv.CPUModel != "" {
+		cores := inv.LogicalCPUs
+		if inv.PhysicalCores > 0 {
+			cores = inv.PhysicalCores
+		}
+		parts = append(parts, fmt.Sprintf("%s (%d cores)", inv.CPUModel, cores))
+	}
+	if inv.MemTotalGB > 0 {
+		parts = append(parts, fmt.Sprintf("%.0f GB RAM", inv.MemTotalGB))
+	}
+	if d := primaryDiskType(inv); d != "" {
+		parts = append(parts, d)
+	}
+	env := inv.CloudVendor
+	if env == "" && inv.Virt != "" && inv.Virt != "none" {
+		env = inv.Virt
+	}
+	if env != "" {
+		parts = append(parts, env)
+	}
+	return strings.Join(parts, "  ·  ")
+}
+
+func primaryDiskType(inv *bench.Inventory) string {
+	var best *bench.DiskInfo
+	for i := range inv.Disks {
+		if best == nil || inv.Disks[i].SizeGB > best.SizeGB {
+			best = &inv.Disks[i]
+		}
+	}
+	if best == nil {
+		return ""
+	}
+	if best.Rotational {
+		return "HDD"
+	}
+	return "SSD"
+}
+
 func humanUptime(d time.Duration) string {
 	days := int(d.Hours()) / 24
 	hours := int(d.Hours()) % 24

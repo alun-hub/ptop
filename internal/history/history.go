@@ -31,6 +31,11 @@ type Record struct {
 	Failed  bool      `json:"failed,omitempty"`
 	Error   string    `json:"error,omitempty"`
 	Metrics []Metric  `json:"metrics"`
+
+	// Machine is the inventory of the host at run time. Recorded on every
+	// record so each is self-contained; used for baseline profiles and to
+	// show what a past run was measured on.
+	Machine *bench.Inventory `json:"machine,omitempty"`
 }
 
 // Metric is the stored form of bench.Metric.
@@ -64,11 +69,15 @@ func NewSession() string {
 	return time.Now().UTC().Format("20060102T150405") + "-" + hex.EncodeToString(b[:])
 }
 
-// Save appends one test result to the history file.
-func Save(session, host, depth, tag string, r bench.Result, runErr error) error {
+// Save appends one test result to the history file. An optional machine
+// inventory is stored with the record when supplied.
+func Save(session, host, depth, tag string, r bench.Result, runErr error, machine ...*bench.Inventory) error {
 	rec := Record{
 		Time: time.Now().UTC(), Session: session, Host: host,
 		Kind: r.Kind.String(), Depth: depth, Tool: r.Tool, Tag: tag, Summary: r.Summary,
+	}
+	if len(machine) > 0 && machine[0] != nil {
+		rec.Machine = machine[0]
 	}
 	if runErr != nil {
 		rec.Failed = true

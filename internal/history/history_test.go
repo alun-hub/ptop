@@ -93,6 +93,36 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	_ = os.Remove(p)
 }
 
+func TestSaveLoadMachine(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "h.jsonl")
+	t.Setenv("PTOP_HISTORY", p)
+
+	inv := bench.Inventory{
+		CPUModel: "Test CPU", PhysicalCores: 4, LogicalCPUs: 8, MemTotalGB: 16,
+		CloudVendor: "AWS", Disks: []bench.DiskInfo{{Device: "nvme0n1", SizeGB: 100}},
+	}
+	r := bench.Result{Kind: bench.CPU, Metrics: []bench.Metric{{Name: "AES", Value: 1}}}
+	if err := Save(NewSession(), "host", "quick", "", r, nil, &inv); err != nil {
+		t.Fatal(err)
+	}
+	// a nil machine must still work and store nothing
+	if err := Save(NewSession(), "host", "quick", "", r, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	recs, err := Load()
+	if err != nil || len(recs) != 2 {
+		t.Fatalf("load: %v %d", err, len(recs))
+	}
+	if recs[0].Machine == nil || recs[0].Machine.CPUModel != "Test CPU" ||
+		recs[0].Machine.CloudVendor != "AWS" || len(recs[0].Machine.Disks) != 1 {
+		t.Fatalf("machine not round-tripped: %+v", recs[0].Machine)
+	}
+	if recs[1].Machine != nil {
+		t.Fatalf("expected no machine on second record, got %+v", recs[1].Machine)
+	}
+}
+
 func TestDeleteSession(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "h.jsonl")
 	t.Setenv("PTOP_HISTORY", p)
@@ -286,4 +316,3 @@ func TestDiffSessions(t *testing.T) {
 		t.Errorf("unexpected Memory item: %+v", diff.Items[5])
 	}
 }
-

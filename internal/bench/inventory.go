@@ -17,51 +17,51 @@ import (
 // zero value when the source is missing. It is shown by `ptop info` and is the
 // basis for baseline profiles and recommendations.
 type Inventory struct {
-	Hostname string
-	OSName   string // /etc/os-release PRETTY_NAME
-	Kernel   string // /proc/sys/kernel/osrelease
-	Arch     string // GOARCH
-	Uptime   time.Duration
+	Hostname string        `json:"hostname,omitempty"`
+	OSName   string        `json:"os_name,omitempty"` // /etc/os-release PRETTY_NAME
+	Kernel   string        `json:"kernel,omitempty"`  // /proc/sys/kernel/osrelease
+	Arch     string        `json:"arch,omitempty"`    // GOARCH
+	Uptime   time.Duration `json:"uptime_ns,omitempty"`
 
-	CPUModel      string
-	CPUVendor     string
-	Sockets       int
-	PhysicalCores int
-	LogicalCPUs   int
-	CPUMHzMax     float64
-	Governor      string   // scaling governor (all-CPU consensus, "" if mixed/unknown)
-	CPUFlags      []string // interesting flags actually present (aes, avx2, ...)
-	Virtualized   bool     // running under a hypervisor
+	CPUModel      string   `json:"cpu_model,omitempty"`
+	CPUVendor     string   `json:"cpu_vendor,omitempty"`
+	Sockets       int      `json:"sockets,omitempty"`
+	PhysicalCores int      `json:"physical_cores,omitempty"`
+	LogicalCPUs   int      `json:"logical_cpus,omitempty"`
+	CPUMHzMax     float64  `json:"cpu_mhz_max,omitempty"`
+	Governor      string   `json:"governor,omitempty"`    // scaling governor (all-CPU consensus, "" if mixed/unknown)
+	CPUFlags      []string `json:"cpu_flags,omitempty"`   // interesting flags actually present (aes, avx2, ...)
+	Virtualized   bool     `json:"virtualized,omitempty"` // running under a hypervisor
 
-	MemTotalGB  float64
-	MemAvailGB  float64
-	SwapTotalGB float64
-	Swappiness  int // -1 if unreadable
-	THP         string
-	NUMANodes   int
+	MemTotalGB  float64 `json:"mem_total_gb,omitempty"`
+	MemAvailGB  float64 `json:"mem_avail_gb,omitempty"`
+	SwapTotalGB float64 `json:"swap_total_gb,omitempty"`
+	Swappiness  int     `json:"swappiness,omitempty"` // -1 if unreadable
+	THP         string  `json:"thp,omitempty"`
+	NUMANodes   int     `json:"numa_nodes,omitempty"`
 
-	Virt        string // "kvm", "docker", "none", ... best-effort
-	CloudVendor string // "AWS", "GCP", "Azure", "Hetzner", ... "" if unknown
-	ProductName string // DMI product name (often the instance type on cloud)
+	Virt        string `json:"virt,omitempty"`         // "kvm", "docker", "none", ... best-effort
+	CloudVendor string `json:"cloud_vendor,omitempty"` // "AWS", "GCP", "Azure", "Hetzner", ... "" if unknown
+	ProductName string `json:"product_name,omitempty"` // DMI product name (often the instance type on cloud)
 
-	Disks []DiskInfo
-	NICs  []NICInfo
+	Disks []DiskInfo `json:"disks,omitempty"`
+	NICs  []NICInfo  `json:"nics,omitempty"`
 }
 
 // DiskInfo describes one whole block device (not a partition).
 type DiskInfo struct {
-	Device     string
-	Model      string
-	SizeGB     float64
-	Rotational bool
-	Scheduler  string
+	Device     string  `json:"device,omitempty"`
+	Model      string  `json:"model,omitempty"`
+	SizeGB     float64 `json:"size_gb,omitempty"`
+	Rotational bool    `json:"rotational,omitempty"`
+	Scheduler  string  `json:"scheduler,omitempty"`
 }
 
 // NICInfo describes one network interface.
 type NICInfo struct {
-	Name      string
-	SpeedMbps int // 0 if unknown (virtual NICs often report -1)
-	State     string
+	Name      string `json:"name,omitempty"`
+	SpeedMbps int    `json:"speed_mbps,omitempty"` // 0 if unknown (virtual NICs often report -1)
+	State     string `json:"state,omitempty"`
 }
 
 var interestingCPUFlags = []string{
