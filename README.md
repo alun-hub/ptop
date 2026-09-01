@@ -173,7 +173,7 @@ ptop history rm 20260831T192659
 
 | Suite | Preferred Tool | Fallback Tool | Measured Metrics |
 | :--- | :--- | :--- | :--- |
-| **Disk** | `fio` | `dd` (`O_DIRECT`) | Sequential read/write throughput, 4 KiB random IOPS, p99 read latency, commit latency (fsync), small file creation/stat/deletion rate, database transactions (SQLite ACID ops/s). |
+| **Disk** | `fio` | `dd` (`O_DIRECT`) | Sequential read/write throughput, 4 KiB random IOPS, p99 read latency, commit latency (fsync), a QD1-vs-QD32 queue-depth sweep with a storage-parallelism ratio (non-Quick), small file creation/stat/deletion rate, database transactions (SQLite ACID ops/s). |
 | **CPU** | `sysbench` | Built-in prime test | Single-core & multi-core ops/s, SMT core scaling, AES-256-GCM encryption throughput, Deflate compression rate, process fork+exec rate, hypervisor steal time, context switch latency, thermal throttling. |
 | **Memory** | `sysbench` | Built-in memory copy | Write bandwidth, random-access latency (pointer chasing), free RAM, NUMA node topology. |
 | **Network** | `ptop serve` / `iperf3` / SSH | Public HTTP CDN | Latency, jitter, packet loss, DNS resolution, TCP+TLS handshake; LAN gateway latency, link speed/duplex, NIC errors, flood-ping throughput estimate (root); download/upload throughput. |

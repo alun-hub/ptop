@@ -56,7 +56,7 @@ Display version information.
 The \fItest\fR argument for \fBptop run\fR can be one of:
 .TP
 .B disk
-Measures sequential read/write throughput, 4 KiB random IOPS, 99th percentile read latency, commit latency (fsync), small file creation/stat/deletion rate, and database transactions (SQLite ACID ops/s). Prefers \fBfio\fR when installed, falling back to direct I/O with \fBdd\fR and built-in metadata and SQLite benchmarks.
+Measures sequential read/write throughput, 4 KiB random IOPS, 99th percentile read latency, commit latency (fsync), small file creation/stat/deletion rate, and database transactions (SQLite ACID ops/s). At \fInormal\fR depth or deeper it also runs a queue-depth sweep (4 KiB random read at QD1 and QD32) and reports a storage-parallelism ratio - roughly 1x on a spinning disk or a throttled cloud volume, 10x or more on healthy NVMe. Prefers \fBfio\fR when installed, falling back to direct I/O with \fBdd\fR and built-in metadata and SQLite benchmarks.
 .TP
 .B cpu
 Measures single-core and multi-core compute throughput, SMT core scaling efficiency, AES-256-GCM encryption throughput, compression rate, fork/exec process creation rate, hypervisor steal time, context switch latency, and thermal throttling (on deep runs). Prefers \fBsysbench\fR when installed, falling back to built-in prime computations.

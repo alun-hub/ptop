@@ -32,32 +32,41 @@ func DetectProfile(inv Inventory) Profile {
 		case d.Rotational:
 			p.Storage = "spinning HDD"
 			p.merge(map[string]Band{
-				"Sequential write":       {60, 200, false, "MB/s"},
-				"Sequential read":        {80, 220, false, "MB/s"},
-				"Random read (4 KiB)":    {70, 400, false, "IOPS"},
-				"Random write (4 KiB)":   {70, 400, false, "IOPS"},
-				"Random read - worst 1%": {5, 40, true, "ms"},
-				"Commit latency (fsync)": {3, 25, true, "ms"},
+				"Sequential write":               {60, 200, false, "MB/s"},
+				"Sequential read":                {80, 220, false, "MB/s"},
+				"Random read (4 KiB)":            {70, 400, false, "IOPS"},
+				"Random write (4 KiB)":           {70, 400, false, "IOPS"},
+				"Random read - worst 1%":         {5, 40, true, "ms"},
+				"Commit latency (fsync)":         {3, 25, true, "ms"},
+				"Random read (4 KiB, QD1)":       {60, 300, false, "IOPS"},
+				"Random read (4 KiB, QD32)":      {70, 500, false, "IOPS"},
+				"Storage parallelism (QD32÷QD1)": {1, 2.5, false, "x"},
 			})
 		case hasPrefix(d.Device, "nvme"):
 			p.Storage = "NVMe SSD"
 			p.merge(map[string]Band{
-				"Sequential write":       {800, 7000, false, "MB/s"},
-				"Sequential read":        {1500, 7000, false, "MB/s"},
-				"Random read (4 KiB)":    {20000, 900000, false, "IOPS"},
-				"Random write (4 KiB)":   {20000, 600000, false, "IOPS"},
-				"Random read - worst 1%": {0.02, 1.0, true, "ms"},
-				"Commit latency (fsync)": {0.02, 1.5, true, "ms"},
+				"Sequential write":               {800, 7000, false, "MB/s"},
+				"Sequential read":                {1500, 7000, false, "MB/s"},
+				"Random read (4 KiB)":            {20000, 900000, false, "IOPS"},
+				"Random write (4 KiB)":           {20000, 600000, false, "IOPS"},
+				"Random read - worst 1%":         {0.02, 1.0, true, "ms"},
+				"Commit latency (fsync)":         {0.02, 1.5, true, "ms"},
+				"Random read (4 KiB, QD1)":       {8000, 120000, false, "IOPS"},
+				"Random read (4 KiB, QD32)":      {150000, 1500000, false, "IOPS"},
+				"Storage parallelism (QD32÷QD1)": {6, 40, false, "x"},
 			})
 		default:
 			p.Storage = "SATA / cloud SSD"
 			p.merge(map[string]Band{
-				"Sequential write":       {200, 600, false, "MB/s"},
-				"Sequential read":        {300, 600, false, "MB/s"},
-				"Random read (4 KiB)":    {2000, 100000, false, "IOPS"},
-				"Random write (4 KiB)":   {2000, 90000, false, "IOPS"},
-				"Random read - worst 1%": {0.1, 5, true, "ms"},
-				"Commit latency (fsync)": {0.1, 6, true, "ms"},
+				"Sequential write":               {200, 600, false, "MB/s"},
+				"Sequential read":                {300, 600, false, "MB/s"},
+				"Random read (4 KiB)":            {2000, 100000, false, "IOPS"},
+				"Random write (4 KiB)":           {2000, 90000, false, "IOPS"},
+				"Random read - worst 1%":         {0.1, 5, true, "ms"},
+				"Commit latency (fsync)":         {0.1, 6, true, "ms"},
+				"Random read (4 KiB, QD1)":       {2000, 40000, false, "IOPS"},
+				"Random read (4 KiB, QD32)":      {10000, 200000, false, "IOPS"},
+				"Storage parallelism (QD32÷QD1)": {3, 25, false, "x"},
 			})
 		}
 	}

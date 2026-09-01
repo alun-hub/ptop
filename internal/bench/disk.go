@@ -3,6 +3,7 @@ package bench
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,10 @@ import (
 	"strings"
 	"time"
 )
+
+// errSkipped marks an optional sub-test that was not attempted (as opposed to
+// one that ran and failed).
+var errSkipped = errors.New("skipped")
 
 func runDisk(ctx context.Context, cfg Config, out chan<- Event) (Result, error) {
 	dir := cfg.Path
@@ -129,7 +134,31 @@ func diskFio(ctx context.Context, cfg Config, dir string, out chan<- Event) (Res
 	if randErr != nil {
 		out <- LogLine{Text: "random test skipped: " + randErr.Error()}
 	}
-	out <- Progress{Frac: 0.78, Label: "random test done"}
+	out <- Progress{Frac: 0.68, Label: "random test done"}
+
+	// Queue-depth sweep: QD1 is the latency-bound single-request rate, QD32
+	// shows how much the storage gains from parallelism (deep on NVMe, ~none
+	// on a spinning disk). Skipped on a Quick run to keep it short.
+	var jqd1, jqd32 fioJob
+	var qdErr error = errSkipped
+	if cfg.Depth != Quick {
+		qsecs := secs
+		if qsecs > 8 {
+			qsecs = 8
+		}
+		stop = timeProgress(out, time.Duration(2*qsecs)*time.Second, "queue-depth sweep")
+		jqd1, qdErr = fioRun(ctx, out, dir, "randread_qd1", qsecs, true,
+			"--rw=randread", "--bs=4k", "--iodepth=1", "--ioengine=libaio", "--direct=1")
+		if qdErr == nil {
+			jqd32, qdErr = fioRun(ctx, out, dir, "randread_qd32", qsecs, true,
+				"--rw=randread", "--bs=4k", "--iodepth=32", "--ioengine=libaio", "--direct=1")
+		}
+		stop()
+		if qdErr != nil && qdErr != errSkipped {
+			out <- LogLine{Text: "queue-depth sweep skipped: " + qdErr.Error()}
+		}
+	}
+	out <- Progress{Frac: 0.78, Label: "queue-depth sweep done"}
 
 	// fsync/commit latency: how long a durable write takes to hit stable
 	// storage. This is what a database waits on for every COMMIT.
@@ -164,6 +193,15 @@ func diskFio(ctx context.Context, cfg Config, dir string, out chan<- Event) (Res
 			iopsMetric("Random read (4 KiB)", jrr.Read.IOPS, noteIOPS(jrr.Read.IOPS)),
 			iopsMetric("Random write (4 KiB)", jrr.Write.IOPS, ""),
 			latMetric("Random read - worst 1%", jrr.Read.p99ns()),
+		)
+	}
+	if qdErr == nil {
+		res.Metrics = append(res.Metrics,
+			iopsMetric("Random read (4 KiB, QD1)", jqd1.Read.IOPS,
+				"single-request rate - bound by latency, not bandwidth"),
+			iopsMetric("Random read (4 KiB, QD32)", jqd32.Read.IOPS,
+				"rate with 32 requests in flight - shows storage parallelism"),
+			parallelismMetric(jqd1.Read.IOPS, jqd32.Read.IOPS),
 		)
 	}
 	if fsErr == nil {
@@ -332,6 +370,35 @@ func commitMetric(ns float64) Metric {
 		Bar: 1 - normLog(clampLo(ms, 0.05), 0.05, 50), HasBar: true,
 		ScaleLo: "slow", ScaleHi: "fast",
 	}.cmp(ms, "ms", true)
+}
+
+// parallelismMetric reports how many times faster random reads get when the
+// queue goes from 1 to 32 outstanding requests. ~1x means the device serves
+// requests strictly one at a time (spinning disk, throttled cloud volume);
+// 10x+ is healthy NVMe / multi-channel behaviour.
+func parallelismMetric(qd1, qd32 float64) Metric {
+	ratio := 0.0
+	if qd1 > 0 {
+		ratio = qd32 / qd1
+	}
+	var v Verdict
+	var note string
+	switch {
+	case ratio >= 8:
+		v, note = VGood, "scales well with concurrency - deep parallelism"
+	case ratio >= 3:
+		v, note = VOkay, "some gain from concurrency"
+	case ratio > 0:
+		v, note = VPoor, "little gain from concurrency - requests are effectively serialised"
+	default:
+		v = VNeutral
+	}
+	return Metric{
+		Name: "Storage parallelism (QD32÷QD1)", Display: fmt.Sprintf("%.1fx", ratio),
+		Verdict: v, Note: note,
+		Bar: normLog(clampLo(ratio, 1), 1, 40), HasBar: true,
+		ScaleLo: "serial", ScaleHi: "parallel",
+	}.cmp(ratio, "x", false)
 }
 
 func durMS(ms float64) string {
