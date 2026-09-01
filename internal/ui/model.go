@@ -19,21 +19,23 @@ type screen int
 const (
 	scrMenu screen = iota
 	scrConfig
-	scrPreflight
 	scrRunning
 	scrResults
-	scrHistArea
 	scrHistory
 	scrHistoryView
 	scrHistDiff
+	scrHistArea
 	scrHistOverview
 	scrHistMetric
+	scrInfo
+	scrHelp
 )
 
 type menuItem struct {
 	kind  bench.Kind
 	all   bool
 	hist  bool
+	info  bool
 	title string
 	desc  string
 	time  string
@@ -65,6 +67,9 @@ type Model struct {
 
 	menu    []menuItem
 	menuCur int
+
+	// overlay: scrInfo / scrHelp render over the screen we came from
+	overlayReturn screen
 
 	// config
 	kind      bench.Kind
@@ -157,6 +162,8 @@ func New() Model {
 				desc: "Disk, CPU, memory, network and GPU one after another. Good for a\nfull picture of a new server."},
 			{hist: true, title: "History", time: "",
 				desc: "Browse earlier runs and see how much faster or slower this machine\nhas become since then."},
+			{info: true, title: "About this machine", time: "",
+				desc: "Hardware inventory, the detected performance profile, and tuning\nrecommendations for this server.  (press i anywhere)"},
 		},
 	}
 }
@@ -197,13 +204,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		}
+
+		// Overlays: a keys reference (?) and the machine-info screen (i),
+		// both reachable from anywhere and dismissed with the same key or esc.
+		if m.scr == scrHelp || m.scr == scrInfo {
+			switch msg.String() {
+			case "esc", "?", "i", "q":
+				m.scr = m.overlayReturn
+			}
+			return m, nil
+		}
+		if !m.typing() {
+			switch msg.String() {
+			case "?":
+				m.overlayReturn = m.scr
+				m.scr = scrHelp
+				return m, nil
+			case "i":
+				m.overlayReturn = m.scr
+				m.scr = scrInfo
+				return m, nil
+			}
+		}
+
 		switch m.scr {
 		case scrMenu:
 			return m.updateMenu(msg)
 		case scrConfig:
 			return m.updateConfig(msg)
-		case scrPreflight:
-			return m.updatePreflight(msg)
 		case scrRunning:
 			return m.updateRunning(msg)
 		case scrResults:
@@ -253,6 +281,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// typing reports whether a text input currently has focus, so global shortcuts
+// (i, ?) are not stolen from what the user is typing.
+func (m Model) typing() bool {
+	return m.host.Focused() || m.editingTag
+}
+
 func (m Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
@@ -265,12 +299,17 @@ func (m Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.menuCur < len(m.menu)-1 {
 			m.menuCur++
 		}
-	case "enter", " ":
+	case "enter":
 		it := m.menu[m.menuCur]
+		if it.info {
+			m.overlayReturn = scrMenu
+			m.scr = scrInfo
+			return m, nil
+		}
 		if it.hist {
 			m.hist, _ = history.Load()
 			m.hcur = 0
-			m.scr = scrHistArea
+			m.scr = scrHistory
 			return m, nil
 		}
 		m.isAll = it.all
@@ -334,20 +373,17 @@ func (m Model) updateHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
-	case "esc":
+	case "esc", "left":
 		if m.diffBase != nil {
 			m.diffBase = nil
 			return m, nil
 		}
-		m.scr = scrHistArea
+		m.scr = scrMenu
 		m.hcur = 0
-	case "left":
-		if m.diffBase != nil {
-			m.diffBase = nil
-			return m, nil
-		}
-		m.scr = scrHistArea
+	case "g":
+		// trends / charts over time, per test area
 		m.hcur = 0
+		m.scr = scrHistArea
 	case "up", "k":
 		if m.hcur > 0 {
 			m.hcur--
@@ -409,9 +445,9 @@ func (m Model) hostFilter() string {
 	return m.info.Hostname
 }
 
-// areaChoices is the list shown on scrHistArea: "Recent runs" + areas with data.
+// areaChoices is the list shown on scrHistArea: the test areas that have data.
 func (m Model) areaChoices() []string {
-	return append([]string{"Recent runs"}, history.Areas(m.hist)...)
+	return history.Areas(m.hist)
 }
 
 func (m Model) updateHistArea(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -419,8 +455,8 @@ func (m Model) updateHistArea(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
-	case "esc":
-		m.scr = scrMenu
+	case "esc", "left":
+		m.scr = scrHistory
 	case "up", "k":
 		if m.hcur > 0 {
 			m.hcur--
@@ -430,13 +466,11 @@ func (m Model) updateHistArea(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.hcur++
 		}
 	case "enter", "right", "l":
-		if m.hcur == 0 {
-			m.scr = scrHistory
-			return m, nil
+		if m.hcur < len(choices) {
+			m.harea = choices[m.hcur]
+			m.haCur = 0
+			m.scr = scrHistOverview
 		}
-		m.harea = choices[m.hcur]
-		m.haCur = 0
-		m.scr = scrHistOverview
 	}
 	return m, nil
 }
@@ -672,7 +706,7 @@ func (m Model) updateConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.host.Focus()
 			return m, textinput.Blink
 		}
-		m.scr = scrPreflight
+		return m.startRun()
 	}
 	return m, nil
 }
@@ -691,18 +725,6 @@ func (m *Model) adjust(f cfgField, d int) {
 		}
 		m.depth = bench.Depth(nd)
 	}
-}
-
-func (m Model) updatePreflight(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.scr = scrConfig
-	case "q", "ctrl+c":
-		return m, tea.Quit
-	case "enter", "y":
-		return m.startRun()
-	}
-	return m, nil
 }
 
 func (m Model) buildQueue() []bench.Config {

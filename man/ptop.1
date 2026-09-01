@@ -100,41 +100,26 @@ Specifies a custom HTTP/HTTPS URL for the network download throughput test.
 \fB\-\-port\fR \fIPORT\fR
 Specifies the TCP port of \fBptop serve\fR on the remote host (default: \fI5330\fR).
 .SH INTERACTIVE TUI
-The interactive interface provides an intuitive keyboard-driven workflow. The main menu also shows a compact \fBSystem\fR panel with the same machine snapshot as \fBptop info\fR (OS, CPU, scaling governor, memory, primary disk, virtualization or cloud provider) plus the most urgent tuning recommendation, collected in the background shortly after startup.
+The interactive interface is a keyboard-driven workflow: \fBmenu\fR -> \fBsettings\fR -> \fBrunning\fR -> \fBresults\fR, with a separate \fBHistory\fR branch. The header shows a breadcrumb of where you are; the footer always lists the keys for the current screen, and \fB?\fR opens the full key reference.
 .TP
-.B Navigation
+.B Global keys
 .RS
 .IP \(bu 2
-\fBUp\fR/\fBDown\fR or \fBk\fR/\fBj\fR: Move between menu items, fields, and options.
+\fBUp\fR/\fBDown\fR or \fBk\fR/\fBj\fR: move. \fBEnter\fR: select / start / open. \fBEsc\fR: back one step. \fBq\fR or \fBCtrl-C\fR: quit.
 .IP \(bu 2
-\fBEnter\fR: Select an option, start a test, or open a run/metric detail view.
+\fBi\fR: open \fBAbout this machine\fR from anywhere - the hardware inventory, the detected performance profile, and the full tuning recommendations (the same content as \fBptop info\fR). The menu also carries the single most urgent tip.
 .IP \(bu 2
-\fBEsc\fR: Go back to the previous screen or menu.
-.IP \(bu 2
-\fBq\fR: Quit the application (or cancel an in-progress test).
+\fB?\fR: toggle the key reference for the current screen.
 .RE
 .TP
-.B Settings Screen
-Use \fBLeft\fR/\fBRight\fR or \fBh\fR/\fBl\fR to adjust test depth and target directory. Press \fBEnter\fR on the host field to type a network peer address.
+.B Settings screen
+\fBLeft\fR/\fBRight\fR or \fBh\fR/\fBl\fR change the highlighted setting (depth, target directory). \fBEnter\fR on the host field types a network peer address. The panel also shows what will run and any caveats; \fBEnter\fR starts the benchmark immediately.
 .TP
-.B Results Screen
-Use \fBLeft\fR/\fBRight\fR to switch tabs between tests when running multiple benchmarks. \fBUp\fR/\fBDown\fR or \fBPgUp\fR/\fBPgDn\fR scrolls long result sets.
+.B Results screen
+\fBLeft\fR/\fBRight\fR switch tabs between tests; \fBUp\fR/\fBDown\fR or \fBPgUp\fR/\fBPgDn\fR scroll. Each value is graded against, and annotated with, the expected range for the detected hardware class.
 .TP
-.B History Screens
-.RS
-.IP \(bu 2
-\fBRecent runs\fR: Lists previous benchmark sessions with timestamps, hostnames, tags, and test suites.
-.IP \(bu 2
-\fBTag run (\fIt\fB)\fR: Pressing \fBt\fR on a selected run opens an inline editor to add, update, or clear the run's label.
-.IP \(bu 2
-\fBDiff comparison (\fISpace\fB/\fIc\fB)\fR: Pressing \fBSpace\fR marks a run as the diff baseline. Pressing \fBc\fR or \fBSpace\fR on another run opens the side-by-side diff comparison view.
-.IP \(bu 2
-\fBDelete run (\fId\fB)\fR: Pressing \fBd\fR on a selected run prompts for deletion with an inline confirmation (\fBy\fR to confirm, \fBn\fR/\fBEsc\fR to cancel).
-.IP \(bu 2
-\fBTest Area Overviews\fR: View metrics for a specific test category with trend sparklines. Press \fBh\fR to toggle filtering by local host or all recorded hosts.
-.IP \(bu 2
-\fBMetric Line Charts\fR: Selecting a metric renders a full Braille time-series line chart and a historical run-by-run delta table.
-.RE
+.B History
+The runs list is the entry point (newest first). \fBEnter\fR opens a run, \fBt\fR edits its tag, \fBd\fR deletes it (with a \fBy\fR/\fBn\fR confirmation), and \fBc\fR marks a run then compares it with a second. \fBg\fR opens the trend charts: pick a test area, then a metric, for a Braille time-series chart and a run-by-run delta table (\fBh\fR toggles this-host / all-hosts).
 .SH HISTORY MANAGEMENT
 Every successful test run is persisted as a JSON record in the local history log file.
 .PP

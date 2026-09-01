@@ -128,6 +128,23 @@ func (p Profile) Annotate(m Metric) (Verdict, string) {
 	return m.Verdict, ""
 }
 
+// ShortRange is just the expected band for a metric, e.g. "60-200 MB/s", or ""
+// when there is no band. Good for an inline annotation next to the value.
+func (p Profile) ShortRange(metricName string) string {
+	b, ok := p.bands[metricName]
+	if !ok {
+		return ""
+	}
+	if b.Unit == "x" {
+		return fmt.Sprintf("%s-%sx", trimNum(b.Lo), trimNum(b.Hi))
+	}
+	unit := ""
+	if b.Unit != "" {
+		unit = " " + b.Unit
+	}
+	return fmt.Sprintf("%s-%s%s", trimNum(b.Lo), trimNum(b.Hi), unit)
+}
+
 func profileSummary(p Profile) string {
 	switch {
 	case p.Storage != "" && p.Compute != "":

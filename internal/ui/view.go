@@ -19,8 +19,10 @@ func (m Model) View() string {
 		body = m.viewMenu()
 	case scrConfig:
 		body = m.viewConfig()
-	case scrPreflight:
-		body = m.viewPreflight()
+	case scrInfo:
+		body = m.viewInfo()
+	case scrHelp:
+		body = m.viewHelp()
 	case scrRunning:
 		body = m.viewRunning()
 	case scrResults:
@@ -64,11 +66,53 @@ func (m Model) bodyHeight() int {
 
 func (m Model) header() string {
 	title := styTitle.Render(" ptop ")
+	crumb := m.crumb()
+	if crumb != "" {
+		crumb = lipgloss.NewStyle().Foreground(colAccent).Render("  " + crumb)
+	}
 	sys := stySub.Render(fmt.Sprintf("%s  ·  %d cores  ·  %s RAM  ·  %s",
-		trim(m.info.CPUModel, 34), m.info.NumCPU,
+		trim(m.info.CPUModel, 30), m.info.NumCPU,
 		fmtGB(m.info.MemTotalGB), rootTag(m.info.IsRoot)))
-	line := lipgloss.JoinHorizontal(lipgloss.Center, title, "  ", sys)
+	left := lipgloss.JoinHorizontal(lipgloss.Center, title, crumb)
+	gap := m.width() - lipgloss.Width(left) - lipgloss.Width(sys)
+	if gap < 2 {
+		gap = 2
+	}
+	line := left + strings.Repeat(" ", gap) + sys
 	return line + "\n" + stySub.Render(strings.Repeat("─", m.width()))
+}
+
+// crumb is the breadcrumb shown after the title, so the user always knows where
+// they are and what esc leads back to.
+func (m Model) crumb() string {
+	switch m.scr {
+	case scrConfig:
+		if m.isAll {
+			return "› All tests"
+		}
+		return "› " + kindTitle(m.kind)
+	case scrRunning:
+		return "› Running " + kindTitle(m.cur.Kind)
+	case scrResults:
+		return "› Results"
+	case scrInfo:
+		return "› About this machine"
+	case scrHelp:
+		return "› Keys"
+	case scrHistory:
+		return "› History"
+	case scrHistoryView:
+		return "› History › run"
+	case scrHistDiff:
+		return "› History › compare"
+	case scrHistArea:
+		return "› History › Trends"
+	case scrHistOverview:
+		return "› History › Trends › " + m.harea
+	case scrHistMetric:
+		return "› History › Trends › " + m.harea + " › " + trim(m.hmName, 20)
+	}
+	return ""
 }
 
 func rootTag(root bool) string {
@@ -96,43 +140,86 @@ func (m Model) footer() string {
 		return stySub.Render(strings.Repeat("─", m.width())) + "\n" + styHelp.Render(keys)
 	}
 
+	rule := stySub.Render(strings.Repeat("─", m.width()))
+
 	var keys string
 	switch m.scr {
-	case scrMenu:
-		keys = "↑/↓ select   ⏎ continue   q quit"
-	case scrConfig:
-		keys = "↑/↓ field   ←/→ change   ⏎ start   esc back"
-	case scrPreflight:
-		keys = "⏎ start the test   esc change   q quit"
+	case scrInfo:
+		keys = "esc  close   ·   ?  keys"
+	case scrHelp:
+		keys = "esc  close"
 	case scrRunning:
-		keys = "esc cancel   q quit"
-	case scrResults:
-		keys = "←/→ switch test   ↑/↓ scroll   ⏎ back to menu   q quit"
-	case scrHistArea:
-		keys = "↑/↓ select   ⏎ open   esc menu   q quit"
+		keys = "esc  cancel   ·   q  quit"
 	case scrHistory:
 		if m.diffBase != nil {
-			keys = "c/⏎ compare with selected   space cancel base   esc clear"
+			keys = "⏎  pick 2nd run to compare   ·   esc  cancel compare"
 		} else {
-			keys = "↑/↓ select   ⏎ view   t tag   space/c diff   d delete   esc back   q quit"
+			keys = "↑↓ move   ·   ⏎ open   ·   esc back   ·   ?  more keys"
 		}
-	case scrHistoryView:
-		keys = "↑/↓ scroll   t tag   c diff base   d delete   esc back to list   q quit"
-	case scrHistDiff:
-		keys = "↑/↓ scroll   esc back to list   q quit"
-	case scrHistOverview:
-		keys = "↑/↓ metric   ⏎ chart   h hosts   esc back   q quit"
-	case scrHistMetric:
-		keys = "↑/↓ scroll   h hosts   esc back   q quit"
+	default:
+		keys = "↑↓ move   ·   ⏎ select   ·   esc back   ·   i  machine   ·   ?  keys   ·   q  quit"
 	}
-	return stySub.Render(strings.Repeat("─", m.width())) + "\n" + styHelp.Render(keys)
+	return rule + "\n" + styHelp.Render(keys)
+}
+
+// screenKeys is the full key reference for the current screen, shown in the ?
+// overlay.
+func (m Model) screenKeys() [][2]string {
+	nav := [][2]string{
+		{"↑ ↓ / j k", "move"},
+		{"⏎", "select / open"},
+		{"esc", "back one step"},
+		{"i", "about this machine"},
+		{"?", "toggle this help"},
+		{"q  /  ctrl+c", "quit"},
+	}
+	switch m.overlayReturn {
+	case scrMenu:
+		return nav
+	case scrConfig:
+		return append([][2]string{
+			{"↑ ↓", "move between settings"},
+			{"← →", "change the highlighted setting"},
+			{"⏎", "start the benchmark"},
+			{"esc", "back to the menu"},
+		}, nav[3:]...)
+	case scrResults:
+		return append([][2]string{
+			{"← →", "switch between tests"},
+			{"↑ ↓ / PgUp PgDn", "scroll"},
+			{"⏎ / esc", "back to the menu"},
+		}, nav[3:]...)
+	case scrHistory:
+		return append([][2]string{
+			{"↑ ↓", "select a run"},
+			{"⏎", "open the run"},
+			{"c", "mark / compare two runs"},
+			{"t", "edit the run's tag"},
+			{"d", "delete the run"},
+			{"g", "trends over time (charts)"},
+			{"esc", "back to the menu"},
+		}, nav[3:]...)
+	case scrHistoryView, scrHistDiff, scrHistMetric:
+		return append([][2]string{
+			{"↑ ↓ / PgUp PgDn", "scroll"},
+			{"esc", "back to the list"},
+		}, nav[3:]...)
+	case scrHistArea, scrHistOverview:
+		return append([][2]string{
+			{"↑ ↓", "select"},
+			{"⏎", "open"},
+			{"h", "toggle this-host / all-hosts"},
+			{"esc", "back"},
+		}, nav[3:]...)
+	}
+	return nav
 }
 
 // ---- menu -----------------------------------------------------------
 
 func (m Model) viewMenu() string {
 	var rows []string
-	rows = append(rows, stySub.Render("Choose what to measure. Every test has safe defaults -\nyou can fine-tune them in the next step.")+"\n")
+	rows = append(rows, stySub.Render("What would you like to do?")+"\n")
 	for i, it := range m.menu {
 		marker := "  "
 		nameSty := styItem
@@ -146,20 +233,29 @@ func (m Model) viewMenu() string {
 			rows = append(rows, stySub.Render(indent(it.desc, "     ")))
 		}
 	}
-	if sys := m.sysBlock(); sys != "" {
-		rows = append(rows, "", stySub.Render(strings.Repeat("─", m.width()-4)), sys)
+	// one dim status line: the single most urgent tuning tip, if any
+	if adv := bench.Advise(m.inv); len(adv) > 0 {
+		sty := stySub
+		if adv[0].Severity >= bench.SevWarn {
+			sty = verdictStyle(bench.VOkay)
+		}
+		extra := ""
+		if len(adv) > 1 {
+			extra = stySub.Render(fmt.Sprintf("  (+%d more)", len(adv)-1))
+		}
+		rows = append(rows, "", stySub.Render("Tip  ")+sty.Render(adv[0].Title)+extra+
+			stySub.Render("   ·   press i for details"))
 	}
 	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
 }
 
-// sysBlock is the compact machine snapshot shown under the menu. It is empty
-// until the async inventory (see Model.Init) has arrived.
+// sysBlock is the compact machine snapshot. Empty until the async inventory
+// (see Model.Init) has arrived.
 func (m Model) sysBlock() string {
 	inv := m.inv
 	if inv.CPUModel == "" && inv.OSName == "" {
 		return ""
 	}
-	label := lipgloss.NewStyle().Foreground(colAccent).Bold(true)
 	dot := stySub.Render("  ·  ")
 	row := func(k, v string) string {
 		return "  " + stySub.Render(padRight(k, 9)) + v
@@ -179,8 +275,6 @@ func (m Model) sysBlock() string {
 	}
 
 	var rows []string
-	rows = append(rows, label.Render("System"))
-
 	os := firstNonEmpty(inv.OSName, "Linux")
 	if inv.Kernel != "" {
 		os += dot + "kernel " + shortKernel(inv.Kernel)
@@ -226,20 +320,66 @@ func (m Model) sysBlock() string {
 	rows = append(rows, row("Host", env+
 		condStr(inv.ProductName != "", dot+trim(inv.ProductName, 40))))
 
-	if adv := bench.Advise(inv); len(adv) > 0 {
-		top := adv[0]
-		sty := stySub
-		if top.Severity >= bench.SevWarn {
-			sty = verdictStyle(bench.VOkay)
-		}
-		tail := ""
-		if len(adv) > 1 {
-			tail = stySub.Render(fmt.Sprintf("   (+%d more · ptop info)", len(adv)-1))
-		}
-		rows = append(rows, row("Tips", sty.Render(top.Title)+tail))
+	return strings.Join(rows, "\n")
+}
+
+// ---- machine info overlay (i) --------------------------------------------
+
+func (m Model) viewInfo() string {
+	sys := m.sysBlock()
+	if sys == "" {
+		return styPanel.Width(m.width()).Render(stySub.Render("Reading machine details…"))
+	}
+	head := lipgloss.NewStyle().Foreground(colAccent).Bold(true)
+	var rows []string
+	rows = append(rows, head.Render("This machine"), sys)
+
+	if p := bench.DetectProfile(m.inv); p.Summary != "" {
+		rows = append(rows, "", head.Render("Performance profile"),
+			stySub.Render(wrap("  "+p.Summary, m.width()-6)))
 	}
 
-	return strings.Join(rows, "\n")
+	adv := bench.Advise(m.inv)
+	rows = append(rows, "", head.Render("Recommendations"))
+	if len(adv) == 0 {
+		rows = append(rows, stySub.Render("  Nothing stands out — configuration looks fine for benchmarking."))
+	}
+	for _, a := range adv {
+		mark := stySub.Render("  •  ")
+		if a.Severity >= bench.SevWarn {
+			mark = verdictStyle(bench.VOkay).Render("  !  ")
+		}
+		rows = append(rows, mark+styItem.Render(a.Title))
+		rows = append(rows, stySub.Render(indent(wrap(a.Detail, m.width()-12), "     ")))
+		if a.Fix != "" {
+			rows = append(rows, styValue.Render("     $ "+trim(a.Fix, m.width()-12)))
+		}
+	}
+
+	body := clampLines(rows, m.bodyHeight())
+	return styPanel.Width(m.width()).Render(strings.Join(body, "\n"))
+}
+
+// ---- keys overlay (?) --------------------------------------------------
+
+func (m Model) viewHelp() string {
+	head := lipgloss.NewStyle().Foreground(colAccent).Bold(true)
+	var rows []string
+	rows = append(rows, head.Render("Keys"), "")
+	for _, kv := range m.screenKeys() {
+		rows = append(rows, "  "+styKey.Render(padRight(kv[0], 16))+stySub.Render(kv[1]))
+	}
+	rows = append(rows, "", stySub.Render("esc or ? to close"))
+	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+}
+
+// clampLines keeps at most n lines, adding a "more" marker if it had to cut.
+func clampLines(rows []string, n int) []string {
+	if len(rows) <= n {
+		return rows
+	}
+	out := rows[:n-1]
+	return append(out, stySub.Render("  … more — see `ptop info`"))
 }
 
 func shortKernel(k string) string {
@@ -295,7 +435,20 @@ func (m Model) viewConfig() string {
 		rows = append(rows, m.fieldRow(f, active)...)
 		rows = append(rows, "")
 	}
-	rows = append(rows, stySub.Render(m.cfgHint()))
+
+	// folded-in preflight: what will actually run, and any caveats
+	rows = append(rows, stySub.Render(strings.Repeat("─", m.width()-4)))
+	for _, c := range m.buildQueue() {
+		tool, warn := planFor(c)
+		rows = append(rows, stySub.Render("  "+padRight(c.Kind.String(), 8)+"  "+tool))
+		if warn != "" {
+			rows = append(rows, "  "+verdictStyle(bench.VOkay).Render("  ! "+warn))
+		}
+	}
+	rows = append(rows, "", stySub.Render("  Loads the server heavily while it runs — prefer an idle server.  ⏎ to start."))
+	if h := m.cfgHint(); h != "" {
+		rows = append(rows, stySub.Render("  "+h))
+	}
 	return styPanelActive.Width(m.width()).Render(strings.Join(rows, "\n"))
 }
 
@@ -359,23 +512,7 @@ func (m Model) cfgHint() string {
 	return ""
 }
 
-// ---- preflight -----------------------------------------------------
-
-func (m Model) viewPreflight() string {
-	q := m.buildQueue()
-	var rows []string
-	rows = append(rows, lipgloss.NewStyle().Bold(true).Foreground(colAccent).Render("Ready to run"), "")
-	for _, c := range q {
-		tool, warn := planFor(c)
-		rows = append(rows, fmt.Sprintf("  %s  %s", styItem.Render(padRight(c.Kind.String(), 9)), stySub.Render(tool)))
-		if warn != "" {
-			rows = append(rows, "  "+verdictStyle(bench.VOkay).Render("  ! "+warn))
-		}
-	}
-	rows = append(rows, "", stySub.Render("The test loads the server heavily while it runs. Prefer to run it\nwhen the server is not in production use."))
-	return styPanelActive.Width(m.width()).Render(strings.Join(rows, "\n"))
-}
-
+// planFor describes what will run for one config: the tool and any caveat.
 func planFor(c bench.Config) (tool string, warn string) {
 	switch c.Kind {
 	case bench.Disk:
@@ -541,10 +678,13 @@ func (m Model) resultLines() []string {
 	}
 	prof := bench.DetectProfile(m.inv)
 	for _, mt := range rr.res.Metrics {
-		verdict, classNote := prof.Annotate(mt)
+		verdict, _ := prof.Annotate(mt)
 		head := styMetric.Render("  "+mt.Name) + "   " + verdictStyle(verdict).Render(mt.Display)
 		if b := verdictBadge(verdict); b != "" {
 			head += "   " + b
+		}
+		if r := prof.ShortRange(mt.Name); r != "" {
+			head += stySub.Render("   · " + prof.Storage + " " + r)
 		}
 		if d := history.Compare(base, mt.Name, mt.Value, mt.LowerBetter); d.Valid {
 			head += "   " + deltaStyle(d).Render(d.Label())
@@ -555,15 +695,8 @@ func (m Model) resultLines() []string {
 			hi := stySub.Render(trim(mt.ScaleHi, anchorW))
 			rows = append(rows, "  "+lo+" "+gauge(mt.Bar, verdict, gaugeW)+" "+hi)
 		}
-		note := mt.Note
-		if classNote != "" {
-			if note != "" {
-				note += "  ·  "
-			}
-			note += classNote
-		}
-		if note != "" {
-			for i, ln := range strings.Split(wrap(note, measure-4), "\n") {
+		if mt.Note != "" {
+			for i, ln := range strings.Split(wrap(mt.Note, measure-4), "\n") {
 				pre := "  ↳ "
 				if i > 0 {
 					pre = "    "
@@ -592,7 +725,7 @@ func (m Model) viewHistory() string {
 	}
 	var rows []string
 	rows = append(rows, styHead.Render("Past runs"),
-		stySub.Render("Newest first. Open one to see how each number moved since the run before it."), "")
+		stySub.Render("Newest first.  ⏎ open · c compare two · t tag · d delete · g trend charts"), "")
 	for i, s := range sessions {
 		marker := "  "
 		nameSty := styItem
@@ -850,27 +983,24 @@ func (m Model) viewHistArea() string {
 			"No history yet.\n\nRun a test - every run is saved to\n" + history.Path()))
 	}
 	choices := m.areaChoices()
+	if len(choices) == 0 {
+		return styPanel.Width(m.width()).Render(stySub.Render("No completed runs to chart yet."))
+	}
 	var rows []string
-	rows = append(rows, styHead.Render("History"),
-		stySub.Render(fmt.Sprintf("%d runs recorded. Pick a test area to see its numbers over time.", len(m.hist))), "")
+	rows = append(rows, styHead.Render("Trends over time"),
+		stySub.Render("Pick a test area to see each of its numbers as a chart."), "")
 	for i, c := range choices {
 		marker, ns := "  ", styItem
 		if i == m.hcur {
 			marker, ns = styKey.Render("▶ "), styMetric
 		}
-		desc := ""
-		if i == 0 {
-			desc = stySub.Render("   full results of each individual run")
-		} else {
-			n := 0
-			for _, r := range m.hist {
-				if !r.Failed && strings.EqualFold(r.Kind, c) {
-					n++
-				}
+		n := 0
+		for _, r := range m.hist {
+			if !r.Failed && strings.EqualFold(r.Kind, c) {
+				n++
 			}
-			desc = stySub.Render(fmt.Sprintf("   %d runs", n))
 		}
-		rows = append(rows, marker+ns.Render(padRight(c, 16))+desc)
+		rows = append(rows, marker+ns.Render(padRight(c, 16))+stySub.Render(fmt.Sprintf("   %d runs", n)))
 	}
 	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
 }

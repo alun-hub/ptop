@@ -18,7 +18,7 @@ func TestScreensRender(t *testing.T) {
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(Model)
 
-	screens := []screen{scrMenu, scrConfig, scrPreflight, scrRunning, scrResults,
+	screens := []screen{scrMenu, scrConfig, scrInfo, scrHelp, scrRunning, scrResults,
 		scrHistArea, scrHistory, scrHistoryView, scrHistDiff, scrHistOverview, scrHistMetric}
 	for _, s := range screens {
 		mm := m
@@ -49,43 +49,68 @@ func TestScreensRender(t *testing.T) {
 	}
 }
 
-func TestMenuShowsInventoryWhenLoaded(t *testing.T) {
+func TestInfoOverlayShowsInventory(t *testing.T) {
 	m := New()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(Model)
-
-	// Before the async inventory arrives, the menu has no System block.
-	if strings.Contains(m.viewMenu(), "System") {
-		t.Fatal("System block shown before inventory loaded")
-	}
 
 	nm, _ = m.Update(invMsg(bench.Inventory{
 		OSName: "Test Linux 1", Kernel: "6.1.0-test", CPUModel: "Test CPU",
 		LogicalCPUs: 8, PhysicalCores: 4, Governor: "powersave",
 		MemTotalGB: 16, SwapTotalGB: 2, THP: "madvise",
-		Disks: []bench.DiskInfo{{Device: "sda", SizeGB: 500, Scheduler: "none"}},
+		Disks: []bench.DiskInfo{{Device: "sda", SizeGB: 500, Scheduler: "none", Rotational: true}},
 		Virt:  "kvm", CloudVendor: "AWS",
 	}))
-	out := nm.(Model).viewMenu()
-	for _, want := range []string{"System", "Test CPU", "governor", "powersave", "AWS", "sda", "Tips"} {
+	m = nm.(Model)
+
+	// 'i' opens the info overlay from the menu and remembers where to return
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	m = nm.(Model)
+	if m.scr != scrInfo || m.overlayReturn != scrMenu {
+		t.Fatalf("i should open info overlay, got scr=%d return=%d", m.scr, m.overlayReturn)
+	}
+	out := m.View()
+	for _, want := range []string{"This machine", "Test CPU", "powersave", "AWS", "Performance profile", "Recommendations"} {
 		if !strings.Contains(out, want) {
-			t.Errorf("menu missing %q\n%s", want, out)
+			t.Errorf("info overlay missing %q\n%s", want, out)
 		}
+	}
+	// 'i' again closes it back to the menu
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	if nm.(Model).scr != scrMenu {
+		t.Fatalf("i should close info overlay, got %d", nm.(Model).scr)
 	}
 }
 
-func TestKeyFlowToPreflight(t *testing.T) {
+func TestKeyFlowMenuToRunning(t *testing.T) {
 	var mdl tea.Model = New()
 	mdl, _ = mdl.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	// menu: down to CPU, enter
+	// menu: down to CPU, enter -> config
 	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyDown})
 	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if mdl.(Model).scr != scrConfig {
 		t.Fatalf("expected config screen, got %d", mdl.(Model).scr)
 	}
-	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEnter}) // depth field -> preflight
-	if mdl.(Model).scr != scrPreflight {
-		t.Fatalf("expected preflight, got %d", mdl.(Model).scr)
+	// config: enter on the depth field starts the run directly (preflight folded in)
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if mdl.(Model).scr != scrRunning {
+		t.Fatalf("expected running, got %d", mdl.(Model).scr)
+	}
+}
+
+func TestHelpOverlayToggles(t *testing.T) {
+	var mdl tea.Model = New()
+	mdl, _ = mdl.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	if mdl.(Model).scr != scrHelp {
+		t.Fatalf("? should open help, got %d", mdl.(Model).scr)
+	}
+	if !strings.Contains(mdl.(Model).View(), "Keys") {
+		t.Fatal("help overlay should render Keys")
+	}
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if mdl.(Model).scr != scrMenu {
+		t.Fatalf("esc should close help, got %d", mdl.(Model).scr)
 	}
 }
 
@@ -174,11 +199,15 @@ func TestHistoryFooterConfirmRender(t *testing.T) {
 		t.Fatalf("expected delete confirmation in footer, got:\n%s", out)
 	}
 
-	// Normal footer should contain "d delete"
+	// Normal footer is the compact legend; the full delete key lives in the ? overlay
 	m.confirmDel = ""
 	outNormal := m.View()
-	if !strings.Contains(outNormal, "d delete") {
-		t.Fatalf("expected d delete in history footer, got:\n%s", outNormal)
+	if !strings.Contains(outNormal, "esc back") {
+		t.Fatalf("expected compact legend in history footer, got:\n%s", outNormal)
+	}
+	m.overlayReturn = scrHistory
+	if !strings.Contains(m.viewHelp(), "delete the run") {
+		t.Fatalf("expected delete in the keys overlay, got:\n%s", m.viewHelp())
 	}
 
 	// In scrHistoryView with confirmDel
@@ -187,13 +216,6 @@ func TestHistoryFooterConfirmRender(t *testing.T) {
 	outView := m.View()
 	if !strings.Contains(outView, "Delete run") || !strings.Contains(outView, "y confirm") {
 		t.Fatalf("expected delete confirmation in history view footer, got:\n%s", outView)
-	}
-
-	// Normal footer for scrHistoryView
-	m.confirmDel = ""
-	outViewNormal := m.View()
-	if !strings.Contains(outViewNormal, "d delete") {
-		t.Fatalf("expected d delete in history view footer, got:\n%s", outViewNormal)
 	}
 }
 
@@ -304,8 +326,8 @@ func TestViewHistoryWithTagsAndDiffBase(t *testing.T) {
 	if !strings.Contains(v, "[✓ Base]") {
 		t.Errorf("expected view to contain [✓ Base] badge, got:\n%s", v)
 	}
-	if !strings.Contains(v, "compare with selected") {
-		t.Errorf("expected footer to contain diffBase prompt, got:\n%s", v)
+	if !strings.Contains(v, "compare") {
+		t.Errorf("expected footer to contain compare prompt, got:\n%s", v)
 	}
 
 	// Now test inline tag editing mode
