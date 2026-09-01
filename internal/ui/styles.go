@@ -9,41 +9,84 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Colour tokens, filled by applyTheme. Three text tiers with deliberate
+// contrast steps:
+//
+//	colHi   headings / metric names / primary values  (brightest)
+//	colFg   body prose, notes                          (mid)
+//	colDim  scale labels, meta lines, help             (dimmest)
 var (
-	// Three text tiers with deliberate contrast steps:
-	//   colHi   headings / metric names / primary values  (brightest)
-	//   colFg   body prose, notes                          (mid)
-	//   colDim  scale labels, meta lines, help             (dimmest)
-	colBg     = lipgloss.Color("#1c1f2e")
-	colHi     = lipgloss.Color("#ffffff")
-	colFg     = lipgloss.Color("#dce2f7")
-	colDim    = lipgloss.Color("#9aa6cc")
-	colMuted  = lipgloss.Color("#dce2f7") // kept as an alias for colFg
-	colAccent = lipgloss.Color("#7ee0ff")
-	colGood   = lipgloss.Color("#b6f05f")
-	colOkay   = lipgloss.Color("#ffd166")
-	colPoor   = lipgloss.Color("#ff7d99")
-	colTrack  = lipgloss.Color("#4e587d")
+	colBg     lipgloss.Color
+	colHi     lipgloss.Color
+	colFg     lipgloss.Color
+	colDim    lipgloss.Color
+	colMuted  lipgloss.Color // alias of colFg, kept for older call sites
+	colAccent lipgloss.Color
+	colGood   lipgloss.Color
+	colOkay   lipgloss.Color
+	colPoor   lipgloss.Color
+	colTrack  lipgloss.Color
+)
+
+var (
+	styTitle       lipgloss.Style
+	stySub         lipgloss.Style
+	styKey         lipgloss.Style
+	styHelp        lipgloss.Style
+	styPanel       lipgloss.Style
+	styPanelActive lipgloss.Style
+	stySelected    lipgloss.Style
+	styItem        lipgloss.Style
+	styValue       lipgloss.Style
+	styNote        lipgloss.Style
+	styHead        lipgloss.Style
+	styBody        lipgloss.Style
+	styMetric      lipgloss.Style
+)
+
+// activeThemeKey is the key of the theme currently applied.
+var activeThemeKey string
+
+// applyTheme swaps every colour token and rebuilds the derived styles. Safe to
+// call at runtime (the Appearance picker does, for a live preview).
+func applyTheme(t Theme) {
+	activeThemeKey = t.Key
+
+	colBg = lipgloss.Color(t.Bg)
+	colHi = lipgloss.Color(t.Hi)
+	colFg = lipgloss.Color(t.Fg)
+	colMuted = colFg
+	colDim = lipgloss.Color(t.Dim)
+	colAccent = lipgloss.Color(t.Accent)
+	colGood = lipgloss.Color(t.Good)
+	colOkay = lipgloss.Color(t.Okay)
+	colPoor = lipgloss.Color(t.Poor)
+	colTrack = lipgloss.Color(t.Track)
 
 	styTitle = lipgloss.NewStyle().Bold(true).Foreground(colBg).Background(colAccent).Padding(0, 1)
-	stySub   = lipgloss.NewStyle().Foreground(colDim)
-	styKey   = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-	styHelp  = lipgloss.NewStyle().Foreground(colDim)
+	stySub = lipgloss.NewStyle().Foreground(colDim)
+	styKey = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
+	styHelp = lipgloss.NewStyle().Foreground(colDim)
 
 	styPanel = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colDim).
-			Padding(0, 1)
-	styPanelActive = styPanel.BorderForeground(colAccent)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colDim).
+		Padding(0, 1)
+	styPanelActive = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colAccent).
+		Padding(0, 1)
 
 	stySelected = lipgloss.NewStyle().Foreground(colBg).Background(colAccent).Bold(true)
-	styItem     = lipgloss.NewStyle().Foreground(colHi)
-	styValue    = lipgloss.NewStyle().Foreground(colAccent)
-	styNote     = lipgloss.NewStyle().Foreground(colFg)
-	styHead     = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
-	styBody     = lipgloss.NewStyle().Foreground(colHi)
-	styMetric   = lipgloss.NewStyle().Bold(true).Foreground(colHi)
-)
+	styItem = lipgloss.NewStyle().Foreground(colHi)
+	styValue = lipgloss.NewStyle().Foreground(colAccent)
+	styNote = lipgloss.NewStyle().Foreground(colFg)
+	styHead = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
+	styBody = lipgloss.NewStyle().Foreground(colHi)
+	styMetric = lipgloss.NewStyle().Bold(true).Foreground(colHi)
+}
+
+func init() { applyTheme(defaultTheme()) }
 
 // gauge renders a width-char bar for frac in 0..1, filled in the verdict colour
 // and tracked in a dim rail.

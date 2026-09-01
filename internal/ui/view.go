@@ -23,6 +23,8 @@ func (m Model) View() string {
 		body = m.viewInfo()
 	case scrHelp:
 		body = m.viewHelp()
+	case scrTheme:
+		body = m.viewTheme()
 	case scrRunning:
 		body = m.viewRunning()
 	case scrResults:
@@ -99,6 +101,8 @@ func (m Model) crumb() string {
 		return "› About this machine"
 	case scrHelp:
 		return "› Keys"
+	case scrTheme:
+		return "› Appearance"
 	case scrHistory:
 		return "› History"
 	case scrHistoryView:
@@ -148,6 +152,8 @@ func (m Model) footer() string {
 		keys = "esc  close   ·   ?  keys"
 	case scrHelp:
 		keys = "esc  close"
+	case scrTheme:
+		keys = "↑↓ preview   ·   ⏎ keep   ·   esc cancel"
 	case scrRunning:
 		keys = "esc  cancel   ·   q  quit"
 	case scrHistory:
@@ -176,6 +182,12 @@ func (m Model) screenKeys() [][2]string {
 	switch m.overlayReturn {
 	case scrMenu:
 		return nav
+	case scrTheme:
+		return append([][2]string{
+			{"↑ ↓", "preview the next / previous palette"},
+			{"⏎", "keep it (saved for next time)"},
+			{"esc", "cancel — restore the previous palette"},
+		}, nav[3:]...)
 	case scrConfig:
 		return append([][2]string{
 			{"↑ ↓", "move between settings"},
@@ -370,6 +382,43 @@ func (m Model) viewHelp() string {
 		rows = append(rows, "  "+styKey.Render(padRight(kv[0], 16))+stySub.Render(kv[1]))
 	}
 	rows = append(rows, "", stySub.Render("esc or ? to close"))
+	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+}
+
+// ---- appearance picker ----------------------------------------------
+
+func (m Model) viewTheme() string {
+	head := lipgloss.NewStyle().Foreground(colAccent).Bold(true)
+	var rows []string
+	rows = append(rows, head.Render("Appearance"),
+		stySub.Render("The whole interface recolours as you move. Enter keeps the palette."), "")
+
+	swatch := func(hex string) string {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(hex)).Render("█")
+	}
+	for i, t := range themes {
+		marker, ns := "  ", styItem
+		if i == m.themeCur {
+			marker, ns = styKey.Render("▶ "), styMetric
+		}
+		chips := swatch(t.Accent) + swatch(t.Good) + swatch(t.Okay) + swatch(t.Poor) + swatch(t.Track)
+		def := ""
+		if t.Key == defaultThemeKey {
+			def = stySub.Render("  (default)")
+		}
+		rows = append(rows, fmt.Sprintf("%s%s   %s%s", marker, ns.Render(padRight(t.Name, 14)), chips, def))
+		if i == m.themeCur {
+			rows = append(rows, stySub.Render(indent(wrap(t.Blurb, m.width()-10), "     ")))
+		}
+	}
+
+	// a wide sample gauge, drawn in the highlighted palette
+	rows = append(rows, "",
+		stySub.Render("  preview   ")+
+			styMetric.Render("Sequential read")+"  "+styValue.Render("2.4 GB/s")+"  "+
+			verdictStyle(bench.VGood).Render("● good"),
+		"  "+stySub.Render(padLeft("hard disk", 12))+" "+gauge(0.78, bench.VGood, 40)+" "+stySub.Render("fast NVMe"),
+	)
 	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
 }
 

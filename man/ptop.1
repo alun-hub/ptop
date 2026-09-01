@@ -110,6 +110,8 @@ The interactive interface is a keyboard-driven workflow: \fBmenu\fR -> \fBsettin
 \fBi\fR: open \fBAbout this machine\fR from anywhere - the hardware inventory, the detected performance profile, and the full tuning recommendations (the same content as \fBptop info\fR). The menu also carries the single most urgent tip.
 .IP \(bu 2
 \fB?\fR: toggle the key reference for the current screen.
+.IP \(bu 2
+\fBAppearance\fR (menu): pick one of five colour palettes - \fBSignal\fR (default), \fBFaded Storm\fR, \fBTokyo Night\fR, \fBGruvbox\fR, \fBNeon Grid\fR. The interface recolours live as you move; \fBEnter\fR keeps the choice, \fBEsc\fR restores the previous one. See also \fBPTOP_THEME\fR.
 .RE
 .TP
 .B Settings screen
@@ -150,12 +152,21 @@ Delete a benchmark run from history by 1-based index number or session ID prefix
 .B PTOP_HISTORY
 Override the filesystem path to the JSONL history file (default: \fI$XDG_DATA_HOME/ptop/history.jsonl\fR or \fI~/.local/share/ptop/history.jsonl\fR).
 .TP
+.B PTOP_THEME
+Force the TUI colour palette for this run, overriding the saved preference: \fBsignal\fR (default), \fBfaded-storm\fR, \fBtokyo-night\fR, \fBgruvbox\fR, or \fBneon-grid\fR. The interactive \fBAppearance\fR menu item is the usual way to change it; the choice is remembered in \fI$XDG_CONFIG_HOME/ptop/theme\fR.
+.TP
 .B XDG_DATA_HOME
 Base directory for user data files.
+.TP
+.B XDG_CONFIG_HOME
+Base directory for user configuration (the saved theme).
 .SH FILES
 .TP
 .I ~/.local/share/ptop/history.jsonl
 Default history log file containing recorded benchmark runs in JSON Lines format.
+.TP
+.I ~/.config/ptop/theme
+The chosen TUI colour palette (a single word).
 .SH EXIT STATUS
 .TP
 .B 0

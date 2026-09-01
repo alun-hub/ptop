@@ -29,6 +29,7 @@ const (
 	scrHistMetric
 	scrInfo
 	scrHelp
+	scrTheme
 )
 
 type menuItem struct {
@@ -36,6 +37,7 @@ type menuItem struct {
 	all   bool
 	hist  bool
 	info  bool
+	theme bool
 	title string
 	desc  string
 	time  string
@@ -70,6 +72,10 @@ type Model struct {
 
 	// overlay: scrInfo / scrHelp render over the screen we came from
 	overlayReturn screen
+
+	// appearance picker
+	themeCur    int    // cursor in themes[]
+	themeOnOpen string // theme key when the picker opened, restored on esc
 
 	// config
 	kind      bench.Kind
@@ -138,6 +144,10 @@ func New() Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
+	if t, ok := themeByKey(loadThemeKey()); ok {
+		applyTheme(t)
+	}
+
 	return Model{
 		info:     info,
 		scr:      scrMenu,
@@ -147,6 +157,7 @@ func New() Model {
 		tagInput: tiTag,
 		prog:     p,
 		spin:     sp,
+		themeCur: themeIndex(activeThemeKey),
 		menu: []menuItem{
 			{kind: bench.Disk, title: "Disk performance", time: "~1-3 min",
 				desc: "How fast the disk reads and writes large files, and how many small\nrandom operations it can handle (important for databases)."},
@@ -164,6 +175,8 @@ func New() Model {
 				desc: "Browse earlier runs and see how much faster or slower this machine\nhas become since then."},
 			{info: true, title: "About this machine", time: "",
 				desc: "Hardware inventory, the detected performance profile, and tuning\nrecommendations for this server.  (press i anywhere)"},
+			{theme: true, title: "Appearance", time: "",
+				desc: "Choose the colour palette. It previews live as you move; Enter keeps it."},
 		},
 	}
 }
@@ -230,6 +243,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.scr {
 		case scrMenu:
 			return m.updateMenu(msg)
+		case scrTheme:
+			return m.updateTheme(msg)
 		case scrConfig:
 			return m.updateConfig(msg)
 		case scrRunning:
@@ -306,6 +321,12 @@ func (m Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.scr = scrInfo
 			return m, nil
 		}
+		if it.theme {
+			m.themeOnOpen = activeThemeKey
+			m.themeCur = themeIndex(activeThemeKey)
+			m.scr = scrTheme
+			return m, nil
+		}
 		if it.hist {
 			m.hist, _ = history.Load()
 			m.hcur = 0
@@ -321,6 +342,36 @@ func (m Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.configFields()[0] == fieldHost {
 			m.host.Focus()
 		}
+	}
+	return m, nil
+}
+
+// updateTheme drives the Appearance picker. Moving the cursor previews a theme
+// immediately; Enter keeps and persists it, Esc restores the one in effect when
+// the picker opened.
+func (m Model) updateTheme(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "up", "k":
+		if m.themeCur > 0 {
+			m.themeCur--
+		}
+		applyTheme(themes[m.themeCur])
+	case "down", "j":
+		if m.themeCur < len(themes)-1 {
+			m.themeCur++
+		}
+		applyTheme(themes[m.themeCur])
+	case "enter":
+		saveThemeKey(themes[m.themeCur].Key)
+		m.scr = scrMenu
+	case "esc":
+		if t, ok := themeByKey(m.themeOnOpen); ok {
+			applyTheme(t)
+		}
+		m.themeCur = themeIndex(activeThemeKey)
+		m.scr = scrMenu
 	}
 	return m, nil
 }

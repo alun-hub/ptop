@@ -18,7 +18,7 @@ func TestScreensRender(t *testing.T) {
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	m = nm.(Model)
 
-	screens := []screen{scrMenu, scrConfig, scrInfo, scrHelp, scrRunning, scrResults,
+	screens := []screen{scrMenu, scrConfig, scrInfo, scrHelp, scrTheme, scrRunning, scrResults,
 		scrHistArea, scrHistory, scrHistoryView, scrHistDiff, scrHistOverview, scrHistMetric}
 	for _, s := range screens {
 		mm := m
@@ -96,6 +96,70 @@ func TestKeyFlowMenuToRunning(t *testing.T) {
 	if mdl.(Model).scr != scrRunning {
 		t.Fatalf("expected running, got %d", mdl.(Model).scr)
 	}
+}
+
+func TestThemeDefaultIsSignal(t *testing.T) {
+	t.Setenv("PTOP_THEME_FILE", filepath.Join(t.TempDir(), "theme"))
+	t.Setenv("PTOP_THEME", "")
+	_ = New()
+	if activeThemeKey != "signal" {
+		t.Fatalf("default theme = %q, want signal", activeThemeKey)
+	}
+}
+
+func TestThemeEnvOverride(t *testing.T) {
+	t.Setenv("PTOP_THEME_FILE", filepath.Join(t.TempDir(), "theme"))
+	t.Setenv("PTOP_THEME", "gruvbox")
+	_ = New()
+	if activeThemeKey != "gruvbox" {
+		t.Fatalf("PTOP_THEME=gruvbox not applied, got %q", activeThemeKey)
+	}
+	t.Setenv("PTOP_THEME", "signal") // restore for other tests in this binary
+	applyTheme(defaultTheme())
+}
+
+func TestThemePickerPreviewsAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PTOP_THEME_FILE", filepath.Join(dir, "theme"))
+	t.Setenv("PTOP_THEME", "")
+
+	var mdl tea.Model = New()
+	mdl, _ = mdl.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	// menu: jump to the Appearance item (last), open it
+	for i := 0; i < len(mdl.(Model).menu)-1; i++ {
+		mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if mdl.(Model).scr != scrTheme {
+		t.Fatalf("expected theme picker, got %d", mdl.(Model).scr)
+	}
+	start := activeThemeKey
+
+	// move down once -> live preview changes the active theme
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if activeThemeKey == start {
+		t.Fatal("moving the cursor should preview a different theme")
+	}
+	previewed := activeThemeKey
+
+	// esc cancels -> restores the theme in effect on open
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if activeThemeKey != start {
+		t.Fatalf("esc should restore %q, got %q", start, activeThemeKey)
+	}
+
+	// re-open, move, keep with enter -> persisted to the pref file
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyDown})
+	mdl, _ = mdl.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if mdl.(Model).scr != scrMenu {
+		t.Fatalf("enter should return to the menu, got %d", mdl.(Model).scr)
+	}
+	if got := loadThemeKey(); got != previewed {
+		t.Fatalf("kept theme not persisted: file has %q, want %q", got, previewed)
+	}
+
+	applyTheme(defaultTheme()) // reset shared package state
 }
 
 func TestHelpOverlayToggles(t *testing.T) {

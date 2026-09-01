@@ -98,6 +98,10 @@ The footer always shows the keys for the current screen; press <kbd>?</kbd> for 
 | <kbd>g</kbd> | In History: trend charts over time |
 | <kbd>q</kbd> / <kbd>Ctrl+C</kbd> | Quit |
 
+#### Themes
+
+The **Appearance** menu item switches between five colour palettes — **Signal** (default), **Faded Storm**, **Tokyo Night**, **Gruvbox**, **Neon Grid**. The UI recolours live as you move; <kbd>Enter</kbd> keeps the choice (remembered in `~/.config/ptop/theme`). Set `PTOP_THEME=<name>` to force one for a single run.
+
 ---
 
 ### Non-Interactive CLI
