@@ -60,6 +60,7 @@ func waitEvent(ch chan bench.Event) tea.Cmd {
 type Model struct {
 	w, h int
 	info bench.SysInfo
+	inv  bench.Inventory // fuller machine snapshot, filled async after start
 	scr  screen
 
 	menu    []menuItem
@@ -160,7 +161,12 @@ func New() Model {
 	}
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+// invMsg carries the machine inventory collected off the main loop.
+type invMsg bench.Inventory
+
+func (m Model) Init() tea.Cmd {
+	return func() tea.Msg { return invMsg(bench.Inventorize()) }
+}
 
 // ---- update ----------------------------------------------------------
 
@@ -168,6 +174,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
+		return m, nil
+
+	case invMsg:
+		m.inv = bench.Inventory(msg)
 		return m, nil
 
 	case tea.KeyMsg:

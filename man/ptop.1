@@ -16,6 +16,8 @@ ptop \- guided performance measurement and benchmarking for Linux servers
 .B ptop serve
 [\fIADDR\fR]
 .br
+.B ptop info
+.br
 .B ptop history
 [\fI#\fR | \fIdiff\fR \fI#1\fR \fI#2\fR | \fItag\fR \fI#\fR [\fItext\fR] | \fIarea\fR [\fImetric\fR] [\fIall\fR] | \fIrm\fR \fI#\fR|\fIsession-id\fR]
 .br
@@ -39,6 +41,9 @@ Start the lightweight built-in TCP throughput server on the specified address (d
 .TP
 .B history [\fIargs\fR]
 Browse, inspect, or manage historical benchmark runs saved in the JSONL history log.
+.TP
+.B info
+Print a best-effort inventory of the current machine: OS and kernel, CPU model, core counts, scaling governor and notable CPU features, RAM and swap, transparent huge pages, NUMA nodes, whole-disk devices (model, size, HDD/SSD, I/O scheduler), network interfaces, and detected virtualization or cloud provider. All data is read from \fI/proc\fR, \fI/sys\fR, and \fI/etc\fR and requires no elevated privileges. The output ends with a \fBRecommendations\fR section: plain-language tuning advice derived from the inventory (scaling governor, \fBvm.swappiness\fR, transparent huge pages, I/O scheduler, absent benchmark tools, and more), each with the exact command that applies it.
 .TP
 .B \-h\fR, \fB\-\-help\fR, \fBhelp
 Display help summary and usage instructions.
@@ -93,7 +98,7 @@ Specifies a custom HTTP/HTTPS URL for the network download throughput test.
 \fB\-\-port\fR \fIPORT\fR
 Specifies the TCP port of \fBptop serve\fR on the remote host (default: \fI5330\fR).
 .SH INTERACTIVE TUI
-The interactive interface provides an intuitive keyboard-driven workflow:
+The interactive interface provides an intuitive keyboard-driven workflow. The main menu also shows a compact \fBSystem\fR panel with the same machine snapshot as \fBptop info\fR (OS, CPU, scaling governor, memory, primary disk, virtualization or cloud provider) plus the most urgent tuning recommendation, collected in the background shortly after startup.
 .TP
 .B Navigation
 .RS

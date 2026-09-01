@@ -34,6 +34,8 @@ func main() {
 			os.Exit(runServe(os.Args[2:]))
 		case "history", "hist":
 			os.Exit(runHistory(os.Args[2:]))
+		case "info":
+			os.Exit(runInfo(os.Args[2:]))
 		case "-h", "--help", "help":
 			fmt.Print(usage)
 			return
@@ -87,6 +89,7 @@ Usage:
   ptop                          start the interactive interface
   ptop run <test> [flags]       run one test directly and print the result
   ptop serve [addr]             run the throughput server for the network test
+  ptop info                     show a snapshot of this machine (CPU, memory, disks, cloud)
   ptop history [#]              list past runs, or show one (with % vs the run before)
   ptop history diff <#1> <#2>   compare two runs side-by-side
   ptop history tag <#> [text]   add, update, or clear a tag for a run

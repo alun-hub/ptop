@@ -49,6 +49,31 @@ func TestScreensRender(t *testing.T) {
 	}
 }
 
+func TestMenuShowsInventoryWhenLoaded(t *testing.T) {
+	m := New()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(Model)
+
+	// Before the async inventory arrives, the menu has no System block.
+	if strings.Contains(m.viewMenu(), "System") {
+		t.Fatal("System block shown before inventory loaded")
+	}
+
+	nm, _ = m.Update(invMsg(bench.Inventory{
+		OSName: "Test Linux 1", Kernel: "6.1.0-test", CPUModel: "Test CPU",
+		LogicalCPUs: 8, PhysicalCores: 4, Governor: "powersave",
+		MemTotalGB: 16, SwapTotalGB: 2, THP: "madvise",
+		Disks: []bench.DiskInfo{{Device: "sda", SizeGB: 500, Scheduler: "none"}},
+		Virt:  "kvm", CloudVendor: "AWS",
+	}))
+	out := nm.(Model).viewMenu()
+	for _, want := range []string{"System", "Test CPU", "governor", "powersave", "AWS", "sda", "Tips"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("menu missing %q\n%s", want, out)
+		}
+	}
+}
+
 func TestKeyFlowToPreflight(t *testing.T) {
 	var mdl tea.Model = New()
 	mdl, _ = mdl.Update(tea.WindowSizeMsg{Width: 100, Height: 40})

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"ptop/internal/bench"
 	"ptop/internal/history"
@@ -145,7 +146,140 @@ func (m Model) viewMenu() string {
 			rows = append(rows, stySub.Render(indent(it.desc, "     ")))
 		}
 	}
+	if sys := m.sysBlock(); sys != "" {
+		rows = append(rows, "", stySub.Render(strings.Repeat("─", m.width()-4)), sys)
+	}
 	return styPanel.Width(m.width()).Render(strings.Join(rows, "\n"))
+}
+
+// sysBlock is the compact machine snapshot shown under the menu. It is empty
+// until the async inventory (see Model.Init) has arrived.
+func (m Model) sysBlock() string {
+	inv := m.inv
+	if inv.CPUModel == "" && inv.OSName == "" {
+		return ""
+	}
+	label := lipgloss.NewStyle().Foreground(colAccent).Bold(true)
+	dot := stySub.Render("  ·  ")
+	row := func(k, v string) string {
+		return "  " + stySub.Render(padRight(k, 9)) + v
+	}
+
+	cores := fmt.Sprintf("%d cores", inv.LogicalCPUs)
+	if inv.PhysicalCores > 0 && inv.PhysicalCores != inv.LogicalCPUs {
+		cores = fmt.Sprintf("%dC/%dT", inv.PhysicalCores, inv.LogicalCPUs)
+	}
+
+	env := inv.Virt
+	if env == "" || env == "none" {
+		env = "bare metal"
+	}
+	if inv.CloudVendor != "" {
+		env = inv.CloudVendor + " (" + inv.Virt + ")"
+	}
+
+	var rows []string
+	rows = append(rows, label.Render("System"))
+
+	os := firstNonEmpty(inv.OSName, "Linux")
+	if inv.Kernel != "" {
+		os += dot + "kernel " + shortKernel(inv.Kernel)
+	}
+	if inv.Uptime > 0 {
+		os += dot + "up " + humanUp(inv.Uptime)
+	}
+	rows = append(rows, row("OS", os))
+
+	cpu := trim(inv.CPUModel, 40) + dot + cores
+	if inv.Governor != "" {
+		cpu += dot + "governor " + govStyle(inv.Governor)
+	}
+	rows = append(rows, row("CPU", cpu))
+
+	mem := fmt.Sprintf("%s RAM", fmtGB(inv.MemTotalGB))
+	if inv.SwapTotalGB > 0 {
+		mem += dot + fmtGB(inv.SwapTotalGB) + " swap"
+	} else {
+		mem += dot + "no swap"
+	}
+	if inv.THP != "" {
+		mem += dot + "THP " + inv.THP
+	}
+	rows = append(rows, row("Memory", mem))
+
+	if len(inv.Disks) > 0 {
+		d := inv.Disks[0]
+		typ := "SSD"
+		if d.Rotational {
+			typ = "HDD"
+		}
+		disk := fmt.Sprintf("%s %s%s%.0f GB", d.Device, typ, dot, d.SizeGB)
+		if d.Scheduler != "" {
+			disk += dot + "sched " + d.Scheduler
+		}
+		if len(inv.Disks) > 1 {
+			disk += stySub.Render(fmt.Sprintf("   (+%d more)", len(inv.Disks)-1))
+		}
+		rows = append(rows, row("Storage", disk))
+	}
+
+	rows = append(rows, row("Host", env+
+		condStr(inv.ProductName != "", dot+trim(inv.ProductName, 40))))
+
+	if adv := bench.Advise(inv); len(adv) > 0 {
+		top := adv[0]
+		sty := stySub
+		if top.Severity >= bench.SevWarn {
+			sty = verdictStyle(bench.VOkay)
+		}
+		tail := ""
+		if len(adv) > 1 {
+			tail = stySub.Render(fmt.Sprintf("   (+%d more · ptop info)", len(adv)-1))
+		}
+		rows = append(rows, row("Tips", sty.Render(top.Title)+tail))
+	}
+
+	return strings.Join(rows, "\n")
+}
+
+func shortKernel(k string) string {
+	if i := strings.IndexByte(k, '-'); i > 0 {
+		return k[:i]
+	}
+	return k
+}
+
+func humanUp(d time.Duration) string {
+	switch {
+	case d >= 24*time.Hour:
+		return fmt.Sprintf("%dd", int(d.Hours())/24)
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+}
+
+// govStyle flags a power-saving governor - it usually explains soft CPU numbers.
+func govStyle(g string) string {
+	if g == "performance" {
+		return g
+	}
+	return verdictStyle(bench.VOkay).Render(g)
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func condStr(cond bool, s string) string {
+	if cond {
+		return s
+	}
+	return ""
 }
 
 // ---- config ---------------------------------------------------------
