@@ -539,9 +539,11 @@ func (m Model) resultLines() []string {
 	if gaugeW > 96 {
 		gaugeW = 96
 	}
+	prof := bench.DetectProfile(m.inv)
 	for _, mt := range rr.res.Metrics {
-		head := styMetric.Render("  "+mt.Name) + "   " + verdictStyle(mt.Verdict).Render(mt.Display)
-		if b := verdictBadge(mt.Verdict); b != "" {
+		verdict, classNote := prof.Annotate(mt)
+		head := styMetric.Render("  "+mt.Name) + "   " + verdictStyle(verdict).Render(mt.Display)
+		if b := verdictBadge(verdict); b != "" {
 			head += "   " + b
 		}
 		if d := history.Compare(base, mt.Name, mt.Value, mt.LowerBetter); d.Valid {
@@ -551,10 +553,17 @@ func (m Model) resultLines() []string {
 		if mt.HasBar {
 			lo := stySub.Render(padLeft(trim(mt.ScaleLo, anchorW), anchorW))
 			hi := stySub.Render(trim(mt.ScaleHi, anchorW))
-			rows = append(rows, "  "+lo+" "+gauge(mt.Bar, mt.Verdict, gaugeW)+" "+hi)
+			rows = append(rows, "  "+lo+" "+gauge(mt.Bar, verdict, gaugeW)+" "+hi)
 		}
-		if mt.Note != "" {
-			for i, ln := range strings.Split(wrap(mt.Note, measure-4), "\n") {
+		note := mt.Note
+		if classNote != "" {
+			if note != "" {
+				note += "  ·  "
+			}
+			note += classNote
+		}
+		if note != "" {
+			for i, ln := range strings.Split(wrap(note, measure-4), "\n") {
 				pre := "  ↳ "
 				if i > 0 {
 					pre = "    "

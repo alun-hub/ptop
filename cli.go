@@ -93,7 +93,7 @@ func runOne(c bench.Config, session, host, depth, tag string, hist []history.Rec
 				ok = false
 			}
 			base := history.Baseline(hist, c.Kind.String(), host, session)
-			printResult(e.Result, base)
+			printResult(e.Result, base, bench.DetectProfile(*inv))
 			if err := history.Save(session, host, depth, tag, e.Result, e.Err, inv); err != nil {
 				fmt.Fprintf(os.Stderr, "  (could not save to history: %v)\n", err)
 			}
@@ -102,22 +102,30 @@ func runOne(c bench.Config, session, host, depth, tag string, hist []history.Rec
 	return ok
 }
 
-func printResult(r bench.Result, base *history.Record) {
+func printResult(r bench.Result, base *history.Record, prof bench.Profile) {
 	if r.Tool != "" {
 		fmt.Printf("  (tool: %s)\n", r.Tool)
 	}
 	for _, m := range r.Metrics {
+		verdict, classNote := prof.Annotate(m)
 		v := ""
-		if m.Verdict != bench.VNeutral {
-			v = " [" + m.Verdict.Label() + "]"
+		if verdict != bench.VNeutral {
+			v = " [" + verdict.Label() + "]"
 		}
 		delta := ""
 		if d := history.Compare(base, m.Name, m.Value, m.LowerBetter); d.Valid {
 			delta = "   (" + d.Label() + ")"
 		}
 		fmt.Printf("  %-30s %s%s%s\n", m.Name, m.Display, v, delta)
-		if m.Note != "" {
-			fmt.Printf("  %-30s   %s\n", "", m.Note)
+		note := m.Note
+		if classNote != "" {
+			if note != "" {
+				note += "  ·  "
+			}
+			note += classNote
+		}
+		if note != "" {
+			fmt.Printf("  %-30s   %s\n", "", note)
 		}
 	}
 	if r.Summary != "" {
@@ -329,10 +337,17 @@ func runHistory(args []string) int {
 			fmt.Printf("  ERROR: %s\n", r.Error)
 		}
 		base := history.Baseline(older, r.Kind, r.Host, sel.ID)
+		var prof bench.Profile
+		if r.Machine != nil {
+			prof = bench.DetectProfile(*r.Machine)
+		}
 		for _, m := range r.Metrics {
 			v := ""
 			if m.Verdict != "" {
 				v = " [" + m.Verdict + "]"
+			}
+			if cv, _, ok := prof.Grade(m.Name, m.Value); ok {
+				v = " [" + cv.Label() + "]"
 			}
 			delta := ""
 			if d := history.Compare(base, m.Name, m.Value, m.LowerBetter); d.Valid {

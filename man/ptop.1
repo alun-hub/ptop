@@ -43,7 +43,9 @@ Start the lightweight built-in TCP throughput server on the specified address (d
 Browse, inspect, or manage historical benchmark runs saved in the JSONL history log.
 .TP
 .B info
-Print a best-effort inventory of the current machine: OS and kernel, CPU model, core counts, scaling governor and notable CPU features, RAM and swap, transparent huge pages, NUMA nodes, whole-disk devices (model, size, HDD/SSD, I/O scheduler), network interfaces, and detected virtualization or cloud provider. All data is read from \fI/proc\fR, \fI/sys\fR, and \fI/etc\fR and requires no elevated privileges. The output ends with a \fBRecommendations\fR section: plain-language tuning advice derived from the inventory (scaling governor, \fBvm.swappiness\fR, transparent huge pages, I/O scheduler, absent benchmark tools, and more), each with the exact command that applies it.
+Print a best-effort inventory of the current machine: OS and kernel, CPU model, core counts, scaling governor and notable CPU features, RAM and swap, transparent huge pages, NUMA nodes, whole-disk devices (model, size, HDD/SSD, I/O scheduler), network interfaces, and detected virtualization or cloud provider. All data is read from \fI/proc\fR, \fI/sys\fR, and \fI/etc\fR and requires no elevated privileges. It also prints the detected hardware \fBProfile\fR (storage class and compute class) and ends with a \fBRecommendations\fR section: plain-language tuning advice derived from the inventory (scaling governor, \fBvm.swappiness\fR, transparent huge pages, I/O scheduler, absent benchmark tools, and more), each with the exact command that applies it.
+.IP
+Disk metrics are graded against the expected range for the detected storage class (spinning HDD, SATA/cloud SSD, or NVMe SSD) rather than a single absolute scale, and the class range is shown alongside each value. The full inventory is stored with every history record and shown by \fBptop history\fR \fI#\fR.
 .TP
 .B \-h\fR, \fB\-\-help\fR, \fBhelp
 Display help summary and usage instructions.

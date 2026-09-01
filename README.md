@@ -32,7 +32,8 @@ It runs disk, CPU, memory, network, and GPU tests with sensible defaults, transl
 - **Zero-Dependency Static Binary**: Builds to a single standalone binary with zero external runtime dependencies.
 - **Non-Interactive CLI**: Run benchmarks from scripts or over SSH without a TTY (`ptop run all`, `ptop history cpu`).
 - **Built-in Throughput Server**: Includes `ptop serve` to measure network bandwidth between two servers without needing to set up `iperf3`.
-- **Machine Inventory & Tuning Advice**: `ptop info` prints a privilege-free snapshot of the host — CPU model, cores, scaling governor and CPU features, RAM/swap, transparent huge pages, NUMA nodes, whole-disk devices (HDD/SSD, I/O scheduler), NICs, and detected virtualization or cloud provider — followed by plain-language recommendations (governor, `vm.swappiness`, THP, I/O scheduler, missing benchmark tools, …) with the exact command to apply each. A condensed version appears in the interactive menu.
+- **Machine Inventory & Tuning Advice**: `ptop info` prints a privilege-free snapshot of the host — CPU model, cores, scaling governor and CPU features, RAM/swap, transparent huge pages, NUMA nodes, whole-disk devices (HDD/SSD, I/O scheduler), NICs, and detected virtualization or cloud provider — followed by plain-language recommendations (governor, `vm.swappiness`, THP, I/O scheduler, missing benchmark tools, …) with the exact command to apply each. A condensed version appears in the interactive menu, and the full inventory is stored with every history record.
+- **Hardware-Class Baselines**: disk verdicts are graded against what is normal for the detected storage class (spinning HDD, SATA/cloud SSD, NVMe SSD) instead of one absolute scale — so a healthy HDD reads as `ok`, not perpetually `low`, and each metric shows the expected range for its class.
 - **System Man Page**: Ships with a complete manual page (`man ptop`).
 
 ---

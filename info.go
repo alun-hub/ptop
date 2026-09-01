@@ -20,6 +20,9 @@ func runInfo(args []string) int {
 	}
 	inv := bench.Inventorize()
 	fmt.Print(formatInventory(inv))
+	if p := bench.DetectProfile(inv); p.Summary != "" {
+		fmt.Printf("\n== Profile ==\n  %s\n", p.Summary)
+	}
 	fmt.Print(formatAdvice(bench.Advise(inv)))
 	return 0
 }
